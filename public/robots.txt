@@ -1,0 +1,11 @@
+# robots.txt para Hextech Boost
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://hextechboost.com/sitemap.xml
+
+# Crawl-delay
+Crawl-delay: 1
