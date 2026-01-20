@@ -1,132 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { boosterService, orderService } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   const [selectedBooster, setSelectedBooster] = useState(null)
   const [sortBy, setSortBy] = useState('recommended')
+  const [boosters, setBoosters] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { user, token } = useAuth()
 
-  const boosters = [
-    {
-      id: 1,
-      name: 'ShadowJungle',
-      rank: 'Grandmaster',
-      rankImg: 'https://static.wikia.nocookie.net/leagueoflegends/images/f/fc/Season_2022_-_Grandmaster.png',
-      winRate: 94.2,
-      gamesPlayed: 1247,
-      mainChampions: [
-        { name: 'Lee Sin', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/LeeSin.png' },
-        { name: "Kha'Zix", img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Khazix.png' },
-        { name: 'Elise', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Elise.png' }
-      ],
-      avgTime: '18-24h',
-      price: 0, // Sin cargo extra
-      rating: 4.9,
-      reviews: 342,
-      languages: ['ES', 'EN'],
-      specialties: ['Jungle', 'Aggressive Playstyle'],
-      available: true
-    },
-    {
-      id: 2,
-      name: 'MidLaneKing',
-      rank: 'Challenger',
-      rankImg: 'https://static.wikia.nocookie.net/leagueoflegends/images/0/02/Season_2022_-_Challenger.png',
-      winRate: 96.8,
-      gamesPlayed: 892,
-      mainChampions: [
-        { name: 'Yasuo', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Yasuo.png' },
-        { name: 'Zed', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Zed.png' },
-        { name: 'Ahri', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Ahri.png' }
-      ],
-      avgTime: '12-18h',
-      price: 15, // +$15
-      rating: 5.0,
-      reviews: 198,
-      languages: ['ES', 'EN', 'PT'],
-      specialties: ['Mid Lane', 'Carry Potential'],
-      available: true,
-      featured: true
-    },
-    {
-      id: 3,
-      name: 'ADCMaster',
-      rank: 'Grandmaster',
-      rankImg: 'https://static.wikia.nocookie.net/leagueoflegends/images/f/fc/Season_2022_-_Grandmaster.png',
-      winRate: 93.5,
-      gamesPlayed: 1456,
-      mainChampions: [
-        { name: 'Jinx', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Jinx.png' },
-        { name: 'Kai\'Sa', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Kaisa.png' },
-        { name: 'Vayne', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Vayne.png' }
-      ],
-      avgTime: '24-36h',
-      price: 0,
-      rating: 4.8,
-      reviews: 521,
-      languages: ['ES'],
-      specialties: ['ADC', 'Late Game'],
-      available: true
-    },
-    {
-      id: 4,
-      name: 'TopLaneGod',
-      rank: 'Master',
-      rankImg: 'https://static.wikia.nocookie.net/leagueoflegends/images/e/eb/Season_2022_-_Master.png',
-      winRate: 91.3,
-      gamesPlayed: 678,
-      mainChampions: [
-        { name: 'Darius', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Darius.png' },
-        { name: 'Garen', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Garen.png' },
-        { name: 'Sett', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Sett.png' }
-      ],
-      avgTime: '24-48h',
-      price: -5, // Descuento $5
-      rating: 4.7,
-      reviews: 234,
-      languages: ['ES', 'EN'],
-      specialties: ['Top Lane', 'Tank/Bruiser'],
-      available: false
-    },
-    {
-      id: 5,
-      name: 'SupportPro',
-      rank: 'Grandmaster',
-      rankImg: 'https://static.wikia.nocookie.net/leagueoflegends/images/f/fc/Season_2022_-_Grandmaster.png',
-      winRate: 92.1,
-      gamesPlayed: 934,
-      mainChampions: [
-        { name: 'Thresh', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Thresh.png' },
-        { name: 'Nautilus', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Nautilus.png' },
-        { name: 'Leona', img: 'https://ddragon.leagueoflegends.com/cdn/14.24.1/img/champion/Leona.png' }
-      ],
-      avgTime: '20-30h',
-      price: 0,
-      rating: 4.9,
-      reviews: 412,
-      languages: ['ES', 'EN'],
-      specialties: ['Support', 'Engage/Peel'],
-      available: true
+  useEffect(() => {
+    if (isOpen) {
+      loadBoosters()
     }
-  ]
+  }, [isOpen])
+
+  const loadBoosters = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await boosterService.getAll()
+      setBoosters(response.data.boosters || [])
+    } catch (err) {
+      console.error('Error loading boosters:', err)
+      setError('Error al cargar los boosters')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const sortedBoosters = [...boosters].sort((a, b) => {
-    if (sortBy === 'recommended') return b.rating - a.rating
-    if (sortBy === 'fastest') return parseInt(a.avgTime) - parseInt(b.avgTime)
-    if (sortBy === 'winrate') return b.winRate - a.winRate
-    if (sortBy === 'price') return a.price - b.price
+    if (sortBy === 'recommended') return (b.rating || 0) - (a.rating || 0)
+    if (sortBy === 'fastest') return (a.avg_completion_time || 0) - (b.avg_completion_time || 0)
+    if (sortBy === 'winrate') return (b.win_rate || 0) - (a.win_rate || 0)
+    if (sortBy === 'price') return 0 // Todos tienen el mismo precio base
     return 0
   })
 
   const handleSelectBooster = (booster) => {
-    setSelectedBooster(booster)
+    if (booster.is_available) {
+      setSelectedBooster(booster)
+    }
   }
 
-  const handleConfirm = () => {
-    if (selectedBooster) {
-      // Aquí iría la lógica para procesar el pedido
-      console.log('Booster seleccionado:', selectedBooster)
-      console.log('Detalles del pedido:', orderDetails)
+  const handleConfirm = async () => {
+    if (!selectedBooster) return
+
+    if (!token) {
+      alert('Debes iniciar sesión para crear una orden')
       onClose()
+      return
+    }
+
+    try {
+      const orderData = {
+        booster_id: selectedBooster.user_id,
+        ...orderDetails
+      }
+
+      const response = await orderService.create(orderData)
+      alert('¡Orden creada exitosamente!')
+      console.log('Order created:', response.data)
+      onClose()
+    } catch (err) {
+      console.error('Error creating order:', err)
+      alert(err.response?.data?.error || 'Error al crear la orden')
     }
   }
 
@@ -194,133 +134,152 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
 
           {/* Boosters List */}
           <div className="overflow-y-auto max-h-[calc(90vh-280px)] p-6 space-y-4">
-            {sortedBoosters.map(booster => (
-              <motion.div
-                key={booster.id}
-                whileHover={{ scale: 1.01 }}
-                className={`relative p-6 rounded-xl border-2 transition-all cursor-pointer ${
-                  selectedBooster?.id === booster.id
-                    ? 'border-primary bg-primary/5 shadow-[0_0_20px_rgba(0,209,181,0.2)]'
-                    : booster.available
-                    ? 'border-hextech-border bg-hextech-dark hover:border-primary/50'
-                    : 'border-hextech-border bg-hextech-dark/50 opacity-60 cursor-not-allowed'
-                }`}
-                onClick={() => booster.available && handleSelectBooster(booster)}
-              >
-                {/* Featured Badge */}
-                {booster.featured && (
-                  <div className="absolute -top-3 left-6 px-3 py-1 bg-accent-gold text-black text-[10px] font-black uppercase tracking-widest rounded-full">
-                    ⭐ Destacado
-                  </div>
-                )}
-
-                {/* Unavailable Badge */}
-                {!booster.available && (
-                  <div className="absolute -top-3 right-6 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
-                    No Disponible
-                  </div>
-                )}
-
-                <div className="grid grid-cols-12 gap-6 items-center">
-                  {/* Booster Info */}
-                  <div className="col-span-4 flex items-center gap-4">
-                    <div className="relative">
-                      <img 
-                        src={booster.rankImg} 
-                        alt={booster.rank}
-                        className="w-16 h-16 object-contain"
-                      />
-                      <div className="absolute -bottom-1 -right-1 size-5 bg-green-500 rounded-full border-2 border-hextech-dark flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[10px] text-white">check</span>
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold">{booster.name}</h3>
-                      <p className="text-xs text-primary font-bold uppercase tracking-wider">{booster.rank}</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-accent-gold text-sm">★</span>
-                        <span className="text-xs font-bold">{booster.rating}</span>
-                        <span className="text-white/40 text-xs">({booster.reviews})</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="col-span-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest">Win Rate</span>
-                      <span className="text-sm font-bold text-green-500">{booster.winRate}%</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest">Partidas</span>
-                      <span className="text-sm font-bold">{booster.gamesPlayed}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-white/40 uppercase tracking-widest">Tiempo Est.</span>
-                      <span className="text-sm font-bold text-primary">{booster.avgTime}</span>
-                    </div>
-                  </div>
-
-                  {/* Main Champions */}
-                  <div className="col-span-3">
-                    <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Campeones Principales</p>
-                    <div className="flex gap-2">
-                      {booster.mainChampions.map((champ, idx) => (
-                        <div key={idx} className="relative group">
-                          <img 
-                            src={champ.img} 
-                            alt={champ.name}
-                            className="w-10 h-10 rounded border border-primary/30 group-hover:border-primary transition-colors"
-                          />
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                            {champ.name}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-1 mt-2">
-                      {booster.languages.map(lang => (
-                        <span key={lang} className="px-2 py-0.5 bg-hextech-surface border border-hextech-border text-[9px] font-bold rounded">
-                          {lang}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Price */}
-                  <div className="col-span-2 text-right">
-                    {booster.price === 0 ? (
-                      <div>
-                        <p className="text-xs text-white/40 uppercase tracking-widest">Sin cargo extra</p>
-                        <p className="text-2xl font-black text-primary">Incluido</p>
-                      </div>
-                    ) : booster.price > 0 ? (
-                      <div>
-                        <p className="text-xs text-white/40 uppercase tracking-widest">Cargo adicional</p>
-                        <p className="text-2xl font-black text-accent-gold">+${booster.price}</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-xs text-white/40 uppercase tracking-widest">Descuento</p>
-                        <p className="text-2xl font-black text-green-500">${booster.price}</p>
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="inline-block size-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-white/60 mt-4">Cargando boosters...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-red-500">{error}</p>
+                <button
+                  onClick={loadBoosters}
+                  className="mt-4 px-6 py-2 bg-primary text-black font-bold rounded hover:brightness-110 transition"
+                >
+                  Reintentar
+                </button>
+              </div>
+            ) : boosters.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-white/60">No hay boosters disponibles en este momento</p>
+              </div>
+            ) : (
+              sortedBoosters.map(booster => {
+                const mainChampions = booster.main_champions ? JSON.parse(booster.main_champions) : []
+                const languages = booster.languages ? JSON.parse(booster.languages) : []
+                const specialties = booster.specialties ? JSON.parse(booster.specialties) : []
+                
+                return (
+                  <motion.div
+                    key={booster.user_id}
+                    whileHover={{ scale: booster.is_available ? 1.01 : 1 }}
+                    className={`relative p-6 rounded-xl border-2 transition-all ${
+                      booster.is_available ? 'cursor-pointer' : 'cursor-not-allowed'
+                    } ${
+                      selectedBooster?.user_id === booster.user_id
+                        ? 'border-primary bg-primary/5 shadow-[0_0_20px_rgba(0,209,181,0.2)]'
+                        : booster.is_available
+                        ? 'border-hextech-border bg-hextech-dark hover:border-primary/50'
+                        : 'border-hextech-border bg-hextech-dark/50 opacity-60'
+                    }`}
+                    onClick={() => handleSelectBooster(booster)}
+                  >
+                    {/* Unavailable Badge */}
+                    {!booster.is_available && (
+                      <div className="absolute -top-3 right-6 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
+                        No Disponible
                       </div>
                     )}
-                  </div>
-                </div>
 
-                {/* Specialties */}
-                <div className="mt-4 pt-4 border-t border-hextech-border flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-sm">military_tech</span>
-                  <div className="flex gap-2">
-                    {booster.specialties.map((spec, idx) => (
-                      <span key={idx} className="text-xs text-white/60">
-                        {spec}{idx < booster.specialties.length - 1 && ' •'}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                    <div className="grid grid-cols-12 gap-6 items-center">
+                      {/* Booster Info */}
+                      <div className="col-span-4 flex items-center gap-4">
+                        <div className="relative">
+                          <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center">
+                            <span className="text-2xl font-bold text-primary">
+                              {booster.username?.charAt(0).toUpperCase() || 'B'}
+                            </span>
+                          </div>
+                          {booster.is_available && (
+                            <div className="absolute -bottom-1 -right-1 size-5 bg-green-500 rounded-full border-2 border-hextech-dark flex items-center justify-center">
+                              <span className="material-symbols-outlined text-[10px] text-white">check</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold">{booster.username || 'Booster'}</h3>
+                          <p className="text-xs text-primary font-bold uppercase tracking-wider">
+                            {booster.peak_rank || 'Master+'}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-accent-gold text-sm">★</span>
+                            <span className="text-xs font-bold">{booster.rating?.toFixed(1) || '5.0'}</span>
+                            <span className="text-white/40 text-xs">({booster.total_reviews || 0})</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="col-span-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/40 uppercase tracking-widest">Win Rate</span>
+                          <span className="text-sm font-bold text-green-500">
+                            {booster.win_rate ? `${booster.win_rate.toFixed(1)}%` : 'N/A'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/40 uppercase tracking-widest">Órdenes</span>
+                          <span className="text-sm font-bold">{booster.total_orders || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/40 uppercase tracking-widest">Tiempo Est.</span>
+                          <span className="text-sm font-bold text-primary">
+                            {booster.avg_completion_time ? `${booster.avg_completion_time}h` : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Main Champions */}
+                      <div className="col-span-3">
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Información</p>
+                        {mainChampions.length > 0 ? (
+                          <div className="flex gap-2 mb-2">
+                            {mainChampions.slice(0, 3).map((champ, idx) => (
+                              <div key={idx} className="px-2 py-1 bg-hextech-surface border border-hextech-border text-[10px] rounded">
+                                {champ}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-white/40 mb-2">Todos los campeones</p>
+                        )}
+                        {languages.length > 0 && (
+                          <div className="flex gap-1">
+                            {languages.map(lang => (
+                              <span key={lang} className="px-2 py-0.5 bg-hextech-surface border border-hextech-border text-[9px] font-bold rounded">
+                                {lang}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Price */}
+                      <div className="col-span-2 text-right">
+                        <div>
+                          <p className="text-xs text-white/40 uppercase tracking-widest">Sin cargo extra</p>
+                          <p className="text-2xl font-black text-primary">Incluido</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Specialties */}
+                    {specialties.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-hextech-border flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-sm">military_tech</span>
+                        <div className="flex gap-2">
+                          {specialties.map((spec, idx) => (
+                            <span key={idx} className="text-xs text-white/60">
+                              {spec}{idx < specialties.length - 1 && ' •'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )
+              })
+            )}
           </div>
 
           {/* Footer */}

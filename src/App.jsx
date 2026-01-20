@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { AuthProvider } from './context/AuthContext'
 import HomePage from './pages/HomePage'
 import CalculatorPage from './pages/CalculatorPage'
 import RankIconsPage from './pages/RankIconsPage'
@@ -8,6 +9,11 @@ import ReviewsPage from './pages/ReviewsPage'
 import FAQPage from './pages/FAQPage'
 import UserProgressPage from './pages/UserProgressPage'
 import MatchHistoryPage from './pages/MatchHistoryPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+import AdminPage from './pages/AdminPage'
+import BoosterPricingPage from './pages/BoosterPricingPage'
+import BulkPricingPage from './pages/BulkPricingPage'
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -23,6 +29,11 @@ function AnimatedRoutes() {
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/user-progress" element={<UserProgressPage />} />
         <Route path="/match-history" element={<MatchHistoryPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/booster/pricing" element={<BoosterPricingPage />} />
+        <Route path="/booster/bulk-pricing" element={<BulkPricingPage />} />
       </Routes>
     </AnimatePresence>
   )
@@ -30,9 +41,11 @@ function AnimatedRoutes() {
 
 function App() {
   return (
-    <Router>
-      <AnimatedRoutes />
-    </Router>
+    <AuthProvider>
+      <Router>
+        <AnimatedRoutes />
+      </Router>
+    </AuthProvider>
   )
 }
 

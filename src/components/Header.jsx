@@ -1,10 +1,18 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { useAuth } from '../context/AuthContext'
 
 export default function Header() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, logout } = useAuth()
   
   const isActive = (path) => location.pathname === path
+  
+  const handleLogout = () => {
+    logout()
+    navigate('/')
+  }
   
   return (
     <header className="w-full border-b border-hextech-border bg-hextech-dark/80 backdrop-blur-md sticky top-0 z-50">
@@ -109,16 +117,109 @@ export default function Header() {
               />
             )}
           </Link>
+          
+          {user && user.role === 'admin' && (
+            <Link 
+              to="/admin" 
+              className="relative text-sm font-medium uppercase tracking-widest transition-colors group"
+            >
+              <span className={isActive('/admin') ? 'text-red-500' : 'text-red-400 hover:text-red-500'}>
+                🔐 Admin
+              </span>
+              {isActive('/admin') && (
+                <motion.div
+                  layoutId="activeNav"
+                  className="absolute -bottom-2 left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+            </Link>
+          )}
+          
+          {user && user.role === 'booster' && (
+            <>
+              <Link 
+                to="/booster/pricing" 
+                className="relative text-sm font-medium uppercase tracking-widest transition-colors group"
+              >
+                <span className={isActive('/booster/pricing') ? 'text-primary' : 'text-white hover:text-primary'}>
+                  Precios
+                </span>
+                {isActive('/booster/pricing') && (
+                  <motion.div
+                    layoutId="activeNav"
+                    className="absolute -bottom-2 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(0,209,181,0.6)]"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+              </Link>
+              <Link 
+                to="/booster/bulk-pricing" 
+                className="relative text-sm font-medium uppercase tracking-widest transition-colors group"
+              >
+                <span className={isActive('/booster/bulk-pricing') ? 'text-primary' : 'text-white hover:text-primary'}>
+                  Precios Bulk
+                </span>
+                {isActive('/booster/bulk-pricing') && (
+                  <motion.div
+                    layoutId="activeNav"
+                    className="absolute -bottom-2 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(0,209,181,0.6)]"
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+              </Link>
+            </>
+          )}
         </nav>
         
         <div className="flex items-center gap-4">
-          <motion.button 
-            className="px-6 py-2 text-sm font-bold border border-primary text-primary hover:bg-primary hover:text-black transition-all rounded-sm uppercase tracking-tighter"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            Acceso
-          </motion.button>
+          {user ? (
+            <>
+              <div className="hidden md:flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-sm text-white font-medium">{user.username}</p>
+                  <p className="text-xs text-gray-400 capitalize">{user.role}</p>
+                </div>
+                <div className="size-10 rounded-full bg-primary/20 border border-primary flex items-center justify-center">
+                  <span className="text-primary font-bold text-sm">
+                    {user.username.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              </div>
+              <motion.button 
+                onClick={handleLogout}
+                className="px-6 py-2 text-sm font-bold border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-sm uppercase tracking-tighter"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                Salir
+              </motion.button>
+            </>
+          ) : (
+            <>
+              <Link to="/login">
+                <motion.button 
+                  className="px-6 py-2 text-sm font-bold border border-primary text-primary hover:bg-primary hover:text-black transition-all rounded-sm uppercase tracking-tighter"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Acceso
+                </motion.button>
+              </Link>
+              <Link to="/register">
+                <motion.button 
+                  className="px-6 py-2 text-sm font-bold bg-primary text-black hover:brightness-110 transition-all rounded-sm uppercase tracking-tighter"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Registro
+                </motion.button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
