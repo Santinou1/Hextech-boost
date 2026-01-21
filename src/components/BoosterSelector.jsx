@@ -40,7 +40,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   })
 
   const handleSelectBooster = (booster) => {
-    if (booster.is_available) {
+    if (booster.available) {
       setSelectedBooster(booster)
     }
   }
@@ -155,27 +155,42 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
               </div>
             ) : (
               sortedBoosters.map(booster => {
-                const mainChampions = booster.main_champions ? JSON.parse(booster.main_champions) : []
-                const languages = booster.languages ? JSON.parse(booster.languages) : []
-                const specialties = booster.specialties ? JSON.parse(booster.specialties) : []
+                // Handle both string and JSON formats for backward compatibility
+                const mainChampions = booster.main_champions 
+                  ? (typeof booster.main_champions === 'string' && !booster.main_champions.startsWith('[')
+                      ? booster.main_champions.split(',').map(s => s.trim())
+                      : JSON.parse(booster.main_champions))
+                  : []
+                
+                const languages = booster.languages 
+                  ? (typeof booster.languages === 'string' && !booster.languages.startsWith('[')
+                      ? booster.languages.split(',').map(s => s.trim())
+                      : JSON.parse(booster.languages))
+                  : []
+                
+                const specialties = booster.specialties 
+                  ? (typeof booster.specialties === 'string' && !booster.specialties.startsWith('[')
+                      ? booster.specialties.split(',').map(s => s.trim())
+                      : JSON.parse(booster.specialties))
+                  : []
                 
                 return (
                   <motion.div
                     key={booster.user_id}
-                    whileHover={{ scale: booster.is_available ? 1.01 : 1 }}
+                    whileHover={{ scale: booster.available ? 1.01 : 1 }}
                     className={`relative p-6 rounded-xl border-2 transition-all ${
-                      booster.is_available ? 'cursor-pointer' : 'cursor-not-allowed'
+                      booster.available ? 'cursor-pointer' : 'cursor-not-allowed'
                     } ${
                       selectedBooster?.user_id === booster.user_id
                         ? 'border-primary bg-primary/5 shadow-[0_0_20px_rgba(0,209,181,0.2)]'
-                        : booster.is_available
+                        : booster.available
                         ? 'border-hextech-border bg-hextech-dark hover:border-primary/50'
                         : 'border-hextech-border bg-hextech-dark/50 opacity-60'
                     }`}
                     onClick={() => handleSelectBooster(booster)}
                   >
                     {/* Unavailable Badge */}
-                    {!booster.is_available && (
+                    {!booster.available && (
                       <div className="absolute -top-3 right-6 px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
                         No Disponible
                       </div>
@@ -190,7 +205,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
                               {booster.username?.charAt(0).toUpperCase() || 'B'}
                             </span>
                           </div>
-                          {booster.is_available && (
+                          {booster.available && (
                             <div className="absolute -bottom-1 -right-1 size-5 bg-green-500 rounded-full border-2 border-hextech-dark flex items-center justify-center">
                               <span className="material-symbols-outlined text-[10px] text-white">check</span>
                             </div>
