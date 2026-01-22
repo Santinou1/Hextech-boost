@@ -68,6 +68,7 @@ export const boosterService = {
   getMyProfile: () => api.get(BOOSTER_ENDPOINTS.GET_MY_PROFILE),
   upsertProfile: (data) => api.post(BOOSTER_ENDPOINTS.UPSERT_PROFILE, data),
   toggleAvailability: () => api.patch(BOOSTER_ENDPOINTS.TOGGLE_AVAILABILITY),
+  calculatePrice: (boosterId, params) => api.get(PRICING_ENDPOINTS.CALCULATE_PRICE(boosterId), { params }),
 };
 
 // ==================== ORDER SERVICES ====================

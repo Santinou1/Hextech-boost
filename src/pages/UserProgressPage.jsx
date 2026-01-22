@@ -55,11 +55,33 @@ export default function UserProgressPage() {
 
   return (
     <PageTransition>
-      <div className="bg-background-dark font-display text-white min-h-screen">
+      <div className="bg-background-dark font-display text-white min-h-screen relative">
         <Header />
         
+        {/* Coming Soon Overlay */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none" style={{ top: '80px' }}>
+          <div className="bg-hextech-surface/95 backdrop-blur-sm border-2 border-primary rounded-2xl p-12 shadow-[0_0_50px_rgba(0,209,181,0.3)] pointer-events-auto max-w-md mx-4">
+            <div className="text-center space-y-6">
+              <div className="w-24 h-24 mx-auto bg-primary/10 rounded-full border-2 border-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-6xl text-primary">schedule</span>
+              </div>
+              <div>
+                <h2 className="text-4xl font-black uppercase tracking-tighter mb-3 text-primary">Próximamente</h2>
+                <p className="text-white/60 text-sm uppercase tracking-widest font-bold">
+                  Panel de Progreso en Desarrollo
+                </p>
+              </div>
+              <div className="pt-4 border-t border-white/10">
+                <p className="text-xs text-white/40 uppercase tracking-wider">
+                  Esta funcionalidad estará disponible pronto
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         {/* Page Header */}
-        <div className="border-b border-hextech-border bg-hextech-dark/50 backdrop-blur-sm sticky top-20 z-40">
+        <div className="border-b border-hextech-border bg-hextech-dark/50 backdrop-blur-sm sticky top-20 z-40 blur-sm pointer-events-none">
           {/* Demo Banner */}
           <div className="bg-primary/10 border-b border-primary/30">
             <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-center gap-2">
@@ -98,7 +120,7 @@ export default function UserProgressPage() {
           </div>
         </div>
 
-        <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <main className="max-w-7xl mx-auto px-6 py-8 space-y-8 blur-sm pointer-events-none">
           {/* Live Progress Tracker */}
           <section className="bg-hextech-surface/80 backdrop-blur-sm border border-hextech-border rounded-xl p-10 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>

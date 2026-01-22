@@ -19,6 +19,7 @@ export default function CalculatorPage() {
   const [championSearch, setChampionSearch] = useState('')
   const [showChampionSelector, setShowChampionSelector] = useState(false)
   const [showBoosterSelector, setShowBoosterSelector] = useState(false)
+  const [showPriceBreakdown, setShowPriceBreakdown] = useState(false)
 
   // Cargar campeones desde la API de Data Dragon
   useEffect(() => {
@@ -85,9 +86,9 @@ export default function CalculatorPage() {
       }
     }
     
-    // Si es Duo Boost, reducir precio en 20%
+    // Si es Duo Boost, aumentar precio en 20%
     if (isDuoBoost) {
-      basePrice *= 0.8
+      basePrice *= 1.2
     }
     
     // Si seleccionó campeón específico, agregar $5
@@ -101,6 +102,108 @@ export default function CalculatorPage() {
     if (extras.stream) basePrice *= 1.15
     
     return Math.max(basePrice, 20).toFixed(2)
+  }
+
+  // Calcular desglose detallado del precio
+  const getPriceBreakdown = () => {
+    const breakdown = []
+    let basePrice = 20
+    
+    // Precio base por rango/división
+    if (isHighElo(desiredRank)) {
+      breakdown.push({
+        label: `${wins} Victorias en ${RANKS[desiredRank].name}`,
+        value: wins * 15,
+        type: 'base'
+      })
+      basePrice = wins * 15
+    } else {
+      const rankDiff = desiredRank - currentRank
+      
+      if (rankDiff === 0) {
+        const divisionDiff = desiredDivision - currentDivision
+        breakdown.push({
+          label: `${divisionDiff} División${divisionDiff > 1 ? 'es' : ''} en ${RANKS[currentRank].name}`,
+          value: 20 + (divisionDiff * 8),
+          type: 'base'
+        })
+        basePrice = 20 + (divisionDiff * 8)
+      } else {
+        breakdown.push({
+          label: `${rankDiff} Liga${rankDiff > 1 ? 's' : ''} (${RANKS[currentRank].name} → ${RANKS[desiredRank].name})`,
+          value: 20 + (rankDiff * 30),
+          type: 'base'
+        })
+        basePrice = 20 + (rankDiff * 30)
+        
+        const divisionDiff = desiredDivision - currentDivision
+        if (divisionDiff !== 0) {
+          breakdown.push({
+            label: `Ajuste de divisiones`,
+            value: divisionDiff * 5,
+            type: 'adjustment'
+          })
+          basePrice += divisionDiff * 5
+        }
+      }
+    }
+    
+    let currentTotal = basePrice
+    
+    // Duo Boost
+    if (isDuoBoost) {
+      const duoCost = basePrice * 0.2
+      breakdown.push({
+        label: 'Duo Boost (+20%)',
+        value: duoCost,
+        type: 'extra'
+      })
+      currentTotal += duoCost
+    }
+    
+    // Campeón específico
+    if (selectedChampion) {
+      breakdown.push({
+        label: `Campeón: ${selectedChampion.name}`,
+        value: 5,
+        type: 'extra'
+      })
+      currentTotal += 5
+    }
+    
+    // Extras
+    if (extras.lane) {
+      breakdown.push({
+        label: 'Carril Específico',
+        value: 10,
+        type: 'extra'
+      })
+      currentTotal += 10
+    }
+    
+    if (extras.offline) {
+      breakdown.push({
+        label: 'Modo Offline',
+        value: 15,
+        type: 'extra'
+      })
+      currentTotal += 15
+    }
+    
+    if (extras.stream) {
+      const streamCost = currentTotal * 0.15
+      breakdown.push({
+        label: 'Stream Privado (+15%)',
+        value: streamCost,
+        type: 'extra'
+      })
+      currentTotal += streamCost
+    }
+    
+    return {
+      breakdown,
+      total: Math.max(currentTotal, 20)
+    }
   }
 
   // Filtrar campeones por búsqueda
@@ -311,7 +414,7 @@ export default function CalculatorPage() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h4 className="text-xs font-bold tracking-[0.2em] uppercase text-primary">Duo Boost</h4>
-                    <p className="text-[9px] text-white/50 mt-1">Juega con el booster (-20%)</p>
+                    <p className="text-[9px] text-white/50 mt-1">Juega con el booster (+20%)</p>
                   </div>
                   <button
                     onClick={() => setIsDuoBoost(!isDuoBoost)}
@@ -438,10 +541,64 @@ export default function CalculatorPage() {
                   <span className="material-symbols-outlined text-6xl">account_balance_wallet</span>
                 </div>
                 <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-accent-gold/60">Total Estimado</span>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black italic">$</span>
-                  <span className="text-6xl font-black italic tracking-tighter">{calculatePrice()}</span>
+                
+                {/* Precio con tooltip */}
+                <div className="relative">
+                  <button
+                    onMouseEnter={() => setShowPriceBreakdown(true)}
+                    onMouseLeave={() => setShowPriceBreakdown(false)}
+                    onClick={() => setShowPriceBreakdown(!showPriceBreakdown)}
+                    className="flex items-baseline gap-1 cursor-help hover:opacity-80 transition-opacity"
+                  >
+                    <span className="text-4xl font-black italic">$</span>
+                    <span className="text-6xl font-black italic tracking-tighter">{calculatePrice()}</span>
+                    <span className="material-symbols-outlined text-accent-gold/60 text-2xl ml-2">info</span>
+                  </button>
+
+                  {/* Tooltip de desglose */}
+                  {showPriceBreakdown && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-80 bg-hextech-dark border-2 border-accent-gold rounded-lg shadow-[0_0_30px_rgba(255,215,0,0.3)] z-50 p-4">
+                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-hextech-border">
+                        <h3 className="text-sm font-bold text-accent-gold uppercase tracking-wider">Desglose del Precio</h3>
+                        <span className="material-symbols-outlined text-accent-gold text-sm">receipt</span>
+                      </div>
+                      
+                      <div className="space-y-2 mb-3">
+                        {getPriceBreakdown().breakdown.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center text-xs">
+                            <span className={`${
+                              item.type === 'base' ? 'text-white font-bold' :
+                              item.type === 'extra' ? 'text-primary' :
+                              'text-white/60'
+                            }`}>
+                              {item.label}
+                            </span>
+                            <span className={`font-bold ${
+                              item.type === 'base' ? 'text-white' :
+                              item.type === 'extra' ? 'text-primary' :
+                              'text-white/60'
+                            }`}>
+                              +${item.value.toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="border-t border-accent-gold/30 pt-3 flex justify-between items-center">
+                        <span className="text-sm font-black uppercase text-accent-gold">Total</span>
+                        <span className="text-2xl font-black text-accent-gold">
+                          ${getPriceBreakdown().total.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Flecha del tooltip */}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-2">
+                        <div className="w-4 h-4 bg-hextech-dark border-r-2 border-b-2 border-accent-gold rotate-45"></div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <p className="text-[10px] text-white/40 uppercase tracking-widest text-center">
                   {isHighElo(desiredRank) 
                     ? `${wins} Victorias en ${RANKS[desiredRank].name}`
@@ -473,14 +630,15 @@ export default function CalculatorPage() {
         isOpen={showBoosterSelector}
         onClose={() => setShowBoosterSelector(false)}
         orderDetails={{
-          currentRank: RANKS[currentRank].name,
-          currentDivision: currentDivisions[currentDivision],
-          desiredRank: RANKS[desiredRank].name,
-          desiredDivision: isHighElo(desiredRank) ? `${wins} Wins` : desiredDivisions[desiredDivision],
-          price: calculatePrice(),
-          isDuoBoost,
-          selectedChampion: selectedChampion?.name,
-          extras
+          boost_type: isDuoBoost ? 'duo' : 'solo',
+          current_rank: RANKS[currentRank].name,
+          current_division: currentDivisions[currentDivision],
+          desired_rank: RANKS[desiredRank].name,
+          desired_division: isHighElo(desiredRank) ? null : desiredDivisions[desiredDivision],
+          wins_requested: isHighElo(desiredRank) ? wins : null,
+          selected_champion: selectedChampion?.name || null,
+          extras: JSON.stringify(extras),
+          total_price: parseFloat(calculatePrice())
         }}
       />
     </div>

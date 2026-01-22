@@ -14,6 +14,7 @@ import RegisterPage from './pages/RegisterPage'
 import AdminPage from './pages/AdminPage'
 import BoosterPricingPage from './pages/BoosterPricingPage'
 import BulkPricingPage from './pages/BulkPricingPage'
+import BoosterProfilePage from './pages/BoosterProfilePage'
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -32,6 +33,7 @@ function AnimatedRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/booster/profile" element={<BoosterProfilePage />} />
         <Route path="/booster/pricing" element={<BoosterPricingPage />} />
         <Route path="/booster/bulk-pricing" element={<BulkPricingPage />} />
       </Routes>

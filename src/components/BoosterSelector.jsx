@@ -7,8 +7,11 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   const [selectedBooster, setSelectedBooster] = useState(null)
   const [sortBy, setSortBy] = useState('recommended')
   const [boosters, setBoosters] = useState([])
+  const [boosterPrices, setBoosterPrices] = useState({}) // Nuevo: almacenar precios por booster
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showBreakdownModal, setShowBreakdownModal] = useState(false)
+  const [selectedBreakdown, setSelectedBreakdown] = useState(null)
   const { user, token } = useAuth()
 
   useEffect(() => {
@@ -22,20 +25,86 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
       setLoading(true)
       setError(null)
       const response = await boosterService.getAll()
-      setBoosters(response.data.boosters || [])
+      const boostersData = response.data.boosters || []
+      setBoosters(boostersData)
+      
+      // Calcular precio para cada booster
+      await calculatePricesForBoosters(boostersData)
     } catch (err) {
-      console.error('Error loading boosters:', err)
       setError('Error al cargar los boosters')
     } finally {
       setLoading(false)
     }
   }
 
+  const calculatePricesForBoosters = async (boostersData) => {
+    const prices = {}
+    
+    for (const booster of boostersData) {
+      try {
+        // Validar que los datos sean válidos antes de enviar
+        if (!orderDetails.current_rank || !orderDetails.current_division || 
+            !orderDetails.desired_rank) {
+          prices[booster.user_id] = {
+            base_price: orderDetails.total_price || 0,
+            final_price: orderDetails.total_price || 0,
+            price_source: 'default',
+            error: 'Datos de orden inválidos'
+          }
+          continue
+        }
+        
+        // Para Master+, asegurarse de que desired_division sea 'I'
+        const desiredDivision = orderDetails.desired_division || 'I'
+        
+        // Usar el endpoint unificado que considera bulk + individual
+        const response = await boosterService.calculatePrice(booster.user_id, {
+          from_rank: orderDetails.current_rank,
+          from_division: orderDetails.current_division,
+          to_rank: orderDetails.desired_rank,
+          to_division: desiredDivision,
+          boost_type: orderDetails.boost_type
+        })
+        
+        prices[booster.user_id] = {
+          base_price: response.data.base_price,
+          final_price: response.data.final_price,
+          price_source: response.data.price_source,
+          breakdown: response.data.breakdown || null
+        }
+      } catch (err) {
+        // Determinar el tipo de error
+        let errorMessage = 'Sin configuración de precios'
+        if (err.response?.data?.message) {
+          errorMessage = err.response.data.message
+        } else if (err.response?.status === 404) {
+          errorMessage = 'Booster sin precios configurados'
+        } else if (err.message) {
+          errorMessage = err.message
+        }
+        
+        // Si no tiene precio configurado, usar el precio del orderDetails como referencia
+        prices[booster.user_id] = {
+          base_price: orderDetails.total_price || 0,
+          final_price: orderDetails.total_price || 0,
+          price_source: 'default',
+          error: errorMessage
+        }
+      }
+    }
+    
+    setBoosterPrices(prices)
+  }
+
   const sortedBoosters = [...boosters].sort((a, b) => {
     if (sortBy === 'recommended') return (b.rating || 0) - (a.rating || 0)
     if (sortBy === 'fastest') return (a.avg_completion_time || 0) - (b.avg_completion_time || 0)
     if (sortBy === 'winrate') return (b.win_rate || 0) - (a.win_rate || 0)
-    if (sortBy === 'price') return 0 // Todos tienen el mismo precio base
+    if (sortBy === 'price') {
+      const priceA = boosterPrices[a.user_id]?.final_price || 999999
+      const priceB = boosterPrices[b.user_id]?.final_price || 999999
+      return priceA - priceB
+    }
     return 0
   })
 
@@ -62,10 +131,8 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
 
       const response = await orderService.create(orderData)
       alert('¡Orden creada exitosamente!')
-      console.log('Order created:', response.data)
       onClose()
     } catch (err) {
-      console.error('Error creating order:', err)
       alert(err.response?.data?.error || 'Error al crear la orden')
     }
   }
@@ -271,10 +338,60 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
 
                       {/* Price */}
                       <div className="col-span-2 text-right">
-                        <div>
-                          <p className="text-xs text-white/40 uppercase tracking-widest">Sin cargo extra</p>
-                          <p className="text-2xl font-black text-primary">Incluido</p>
-                        </div>
+                        {boosterPrices[booster.user_id] ? (
+                          <div>
+                            {boosterPrices[booster.user_id].error ? (
+                              <>
+                                <p className="text-sm text-yellow-500 font-bold">
+                                  ${boosterPrices[booster.user_id].final_price.toFixed(2)}
+                                </p>
+                                <p className="text-[9px] text-yellow-500/70 uppercase tracking-widest">
+                                  Precio Estimado
+                                </p>
+                                <p className="text-[8px] text-white/40 mt-1">
+                                  {boosterPrices[booster.user_id].error}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                {orderDetails.boost_type === 'duo' && boosterPrices[booster.user_id].base_price !== boosterPrices[booster.user_id].final_price && (
+                                  <p className="text-xs text-white/40 line-through">
+                                    ${boosterPrices[booster.user_id].base_price.toFixed(2)}
+                                  </p>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (boosterPrices[booster.user_id].breakdown) {
+                                      setSelectedBreakdown({
+                                        boosterName: booster.username,
+                                        ...boosterPrices[booster.user_id]
+                                      })
+                                      setShowBreakdownModal(true)
+                                    }
+                                  }}
+                                  className="flex items-center justify-end gap-1 hover:opacity-80 transition-opacity"
+                                >
+                                  <p className="text-2xl font-black text-primary">
+                                    ${boosterPrices[booster.user_id].final_price.toFixed(2)}
+                                  </p>
+                                  {boosterPrices[booster.user_id].breakdown && (
+                                    <span className="material-symbols-outlined text-primary/60 text-sm">info</span>
+                                  )}
+                                </button>
+                                <p className="text-[9px] text-white/40 uppercase tracking-widest">
+                                  {boosterPrices[booster.user_id].price_source === 'individual' ? 'Precio Especial' : 'Precio Base'}
+                                  {orderDetails.boost_type === 'duo' && ' + Duo'}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="inline-block size-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs text-white/40 mt-1">Calculando...</p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -334,6 +451,107 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
           </div>
         </motion.div>
       </div>
+
+      {/* Modal de Desglose de Precio */}
+      <AnimatePresence>
+        {showBreakdownModal && selectedBreakdown && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBreakdownModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-hextech-surface border-2 border-primary rounded-xl shadow-[0_0_50px_rgba(0,209,181,0.3)] p-6"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-hextech-border">
+                <div>
+                  <h3 className="text-xl font-bold text-primary uppercase tracking-wider">Desglose del Precio</h3>
+                  <p className="text-xs text-white/60 mt-1">Booster: {selectedBreakdown.boosterName}</p>
+                </div>
+                <button
+                  onClick={() => setShowBreakdownModal(false)}
+                  className="size-8 flex items-center justify-center rounded-lg bg-hextech-dark border border-hextech-border hover:border-red-500 hover:text-red-500 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+
+              {/* Breakdown Items */}
+              <div className="space-y-3 mb-6">
+                {selectedBreakdown.breakdown.map((item, index) => (
+                  <div key={index} className="flex justify-between items-start p-3 bg-hextech-dark rounded-lg">
+                    <div className="flex-1">
+                      <p className={`text-sm font-bold ${
+                        item.type === 'league_steps' ? 'text-white' :
+                        item.type === 'transition' ? 'text-primary' :
+                        item.type === 'individual_step' ? 'text-accent-gold' :
+                        item.type === 'individual' ? 'text-accent-gold' :
+                        item.type === 'duo_extra' ? 'text-primary' :
+                        'text-white/60'
+                      }`}>
+                        {item.type === 'league_steps' && (
+                          <span>{item.steps} paso{item.steps > 1 ? 's' : ''} en {item.league}</span>
+                        )}
+                        {item.type === 'transition' && (
+                          <span>Transición {item.from} → {item.to}</span>
+                        )}
+                        {item.type === 'individual_step' && (
+                          <span className="flex items-center gap-1">
+                            <span className="text-accent-gold">★</span>
+                            {item.from} → {item.to}
+                          </span>
+                        )}
+                        {item.type === 'individual' && (
+                          <span className="flex items-center gap-1">
+                            <span className="text-accent-gold">★</span>
+                            Precio Individual
+                          </span>
+                        )}
+                        {item.type === 'duo_extra' && (
+                          <span>{item.description}</span>
+                        )}
+                      </p>
+                      {item.type === 'league_steps' && (
+                        <p className="text-xs text-white/40 mt-1">${item.pricePerStep} por paso</p>
+                      )}
+                    </div>
+                    <span className={`text-lg font-black ml-4 ${
+                      item.type === 'league_steps' ? 'text-white' :
+                      item.type === 'transition' ? 'text-primary' :
+                      item.type === 'individual_step' ? 'text-accent-gold' :
+                      item.type === 'individual' ? 'text-accent-gold' :
+                      item.type === 'duo_extra' ? 'text-primary' :
+                      'text-white/60'
+                    }`}>
+                      ${item.cost.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Total */}
+              <div className="border-t-2 border-primary/30 pt-4">
+                <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg">
+                  <span className="text-lg font-black uppercase text-primary">Total</span>
+                  <span className="text-3xl font-black text-primary">
+                    ${selectedBreakdown.final_price.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   )
 }

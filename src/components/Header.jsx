@@ -1,18 +1,34 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
+import { useState, useRef, useEffect } from 'react'
 
 export default function Header() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const [showUserMenu, setShowUserMenu] = useState(false)
+  const menuRef = useRef(null)
   
   const isActive = (path) => location.pathname === path
   
   const handleLogout = () => {
     logout()
     navigate('/')
+    setShowUserMenu(false)
   }
+  
+  // Cerrar menú al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowUserMenu(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   
   return (
     <header className="w-full border-b border-hextech-border bg-hextech-dark/80 backdrop-blur-md sticky top-0 z-50">
@@ -136,49 +152,15 @@ export default function Header() {
               )}
             </Link>
           )}
-          
-          {user && user.role === 'booster' && (
-            <>
-              <Link 
-                to="/booster/pricing" 
-                className="relative text-sm font-medium uppercase tracking-widest transition-colors group"
-              >
-                <span className={isActive('/booster/pricing') ? 'text-primary' : 'text-white hover:text-primary'}>
-                  Precios
-                </span>
-                {isActive('/booster/pricing') && (
-                  <motion.div
-                    layoutId="activeNav"
-                    className="absolute -bottom-2 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(0,209,181,0.6)]"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-              </Link>
-              <Link 
-                to="/booster/bulk-pricing" 
-                className="relative text-sm font-medium uppercase tracking-widest transition-colors group"
-              >
-                <span className={isActive('/booster/bulk-pricing') ? 'text-primary' : 'text-white hover:text-primary'}>
-                  Precios Bulk
-                </span>
-                {isActive('/booster/bulk-pricing') && (
-                  <motion.div
-                    layoutId="activeNav"
-                    className="absolute -bottom-2 left-0 right-0 h-0.5 bg-primary shadow-[0_0_8px_rgba(0,209,181,0.6)]"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-              </Link>
-            </>
-          )}
         </nav>
         
         <div className="flex items-center gap-4">
           {user ? (
-            <>
-              <div className="hidden md:flex items-center gap-3">
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="hidden md:flex items-center gap-3 hover:opacity-80 transition-opacity"
+              >
                 <div className="text-right">
                   <p className="text-sm text-white font-medium">{user.username}</p>
                   <p className="text-xs text-gray-400 capitalize">{user.role}</p>
@@ -188,16 +170,82 @@ export default function Header() {
                     {user.username.charAt(0).toUpperCase()}
                   </span>
                 </div>
-              </div>
-              <motion.button 
-                onClick={handleLogout}
-                className="px-6 py-2 text-sm font-bold border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-all rounded-sm uppercase tracking-tighter"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Salir
-              </motion.button>
-            </>
+                <span className="material-symbols-outlined text-white/60 text-sm">
+                  {showUserMenu ? 'expand_less' : 'expand_more'}
+                </span>
+              </button>
+
+              {/* Dropdown Menu */}
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute right-0 top-full mt-2 w-56 bg-hextech-surface border border-hextech-border rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden z-50"
+                  >
+                    {/* User Info */}
+                    <div className="px-4 py-3 border-b border-hextech-border bg-hextech-dark">
+                      <p className="text-sm font-bold text-white">{user.username}</p>
+                      <p className="text-xs text-white/60">{user.email}</p>
+                      <p className="text-xs text-primary capitalize mt-1">{user.role}</p>
+                    </div>
+
+                    {/* Menu Items */}
+                    <div className="py-2">
+                      {user.role === 'booster' && (
+                        <>
+                          <Link
+                            to="/booster/profile"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">person</span>
+                            Mi Perfil
+                          </Link>
+                          <Link
+                            to="/booster/pricing"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">payments</span>
+                            Precios
+                          </Link>
+                          <Link
+                            to="/booster/bulk-pricing"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">inventory_2</span>
+                            Precios Bulk
+                          </Link>
+                        </>
+                      )}
+                      
+                      {user.role === 'client' && (
+                        <Link
+                          to="/user-progress"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-primary text-lg">dashboard</span>
+                          Mi Panel
+                        </Link>
+                      )}
+
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-hextech-dark hover:text-red-500 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-lg">logout</span>
+                        Cerrar Sesión
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           ) : (
             <>
               <Link to="/login">
