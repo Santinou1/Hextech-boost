@@ -15,6 +15,12 @@ import AdminPage from './pages/AdminPage'
 import BoosterPricingPage from './pages/BoosterPricingPage'
 import BulkPricingPage from './pages/BulkPricingPage'
 import BoosterProfilePage from './pages/BoosterProfilePage'
+import MyOrdersPage from './pages/MyOrdersPage'
+import BoosterOrdersPage from './pages/BoosterOrdersPage'
+import OrderDetailPage from './pages/OrderDetailPage'
+import AdminPaymentsPage from './pages/AdminPaymentsPage'
+import ClientDashboard from './pages/ClientDashboard'
+import BoosterDashboard from './pages/BoosterDashboard'
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -36,6 +42,12 @@ function AnimatedRoutes() {
         <Route path="/booster/profile" element={<BoosterProfilePage />} />
         <Route path="/booster/pricing" element={<BoosterPricingPage />} />
         <Route path="/booster/bulk-pricing" element={<BulkPricingPage />} />
+        <Route path="/orders" element={<MyOrdersPage />} />
+        <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/booster/orders" element={<BoosterOrdersPage />} />
+        <Route path="/admin/payments" element={<AdminPaymentsPage />} />
+        <Route path="/dashboard" element={<ClientDashboard />} />
+        <Route path="/booster/dashboard" element={<BoosterDashboard />} />
       </Routes>
     </AnimatePresence>
   )

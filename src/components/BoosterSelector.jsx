@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { boosterService, orderService } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import CheckoutModal from './CheckoutModal'
 
 export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   const [selectedBooster, setSelectedBooster] = useState(null)
@@ -12,6 +13,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   const [error, setError] = useState(null)
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
   const [selectedBreakdown, setSelectedBreakdown] = useState(null)
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false)
   const { user, token } = useAuth()
 
   useEffect(() => {
@@ -43,8 +45,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
     for (const booster of boostersData) {
       try {
         // Validar que los datos sean válidos antes de enviar
-        if (!orderDetails.current_rank || !orderDetails.current_division || 
-            !orderDetails.desired_rank) {
+        if (!orderDetails.current_rank || !orderDetails.desired_rank) {
           prices[booster.user_id] = {
             base_price: orderDetails.total_price || 0,
             final_price: orderDetails.total_price || 0,
@@ -54,17 +55,31 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
           continue
         }
         
-        // Para Master+, asegurarse de que desired_division sea 'I'
-        const desiredDivision = orderDetails.desired_division || 'I'
+        // Construir parámetros según si usa LP o divisiones
+        const params = {
+          from_rank: orderDetails.current_rank,
+          to_rank: orderDetails.desired_rank,
+          boost_type: orderDetails.boost_type
+        }
+        
+        // Agregar LP si están presentes (Master+)
+        if (orderDetails.current_lp !== null && orderDetails.current_lp !== undefined) {
+          params.from_lp = orderDetails.current_lp
+        }
+        if (orderDetails.desired_lp !== null && orderDetails.desired_lp !== undefined) {
+          params.to_lp = orderDetails.desired_lp
+        }
+        
+        // Agregar divisiones si están presentes (rangos normales)
+        if (orderDetails.current_division) {
+          params.from_division = orderDetails.current_division
+        }
+        if (orderDetails.desired_division) {
+          params.to_division = orderDetails.desired_division
+        }
         
         // Usar el endpoint unificado que considera bulk + individual
-        const response = await boosterService.calculatePrice(booster.user_id, {
-          from_rank: orderDetails.current_rank,
-          from_division: orderDetails.current_division,
-          to_rank: orderDetails.desired_rank,
-          to_division: desiredDivision,
-          boost_type: orderDetails.boost_type
-        })
+        const response = await boosterService.calculatePrice(booster.user_id, params)
         
         prices[booster.user_id] = {
           base_price: response.data.base_price,
@@ -77,6 +92,8 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
         let errorMessage = 'Sin configuración de precios'
         if (err.response?.data?.message) {
           errorMessage = err.response.data.message
+        } else if (err.response?.data?.error) {
+          errorMessage = err.response.data.error
         } else if (err.response?.status === 404) {
           errorMessage = 'Booster sin precios configurados'
         } else if (err.message) {
@@ -109,38 +126,58 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
   })
 
   const handleSelectBooster = (booster) => {
+    console.log('=== Selecting Booster ===');
+    console.log('booster:', booster);
+    console.log('available:', booster.available);
+    
     if (booster.available) {
-      setSelectedBooster(booster)
+      setSelectedBooster(booster);
+      console.log('✅ Booster selected');
+    } else {
+      console.log('❌ Booster not available');
     }
   }
 
   const handleConfirm = async () => {
-    if (!selectedBooster) return
-
-    if (!token) {
-      alert('Debes iniciar sesión para crear una orden')
-      onClose()
-      return
+    console.log('=== handleConfirm Debug ===');
+    console.log('selectedBooster:', selectedBooster);
+    console.log('token:', token);
+    console.log('user:', user);
+    console.log('showCheckoutModal:', showCheckoutModal);
+    
+    if (!selectedBooster) {
+      console.log('❌ No booster selected');
+      alert('Por favor selecciona un booster primero');
+      return;
     }
 
-    try {
-      const orderData = {
-        booster_id: selectedBooster.user_id,
-        ...orderDetails
-      }
-
-      const response = await orderService.create(orderData)
-      alert('¡Orden creada exitosamente!')
-      onClose()
-    } catch (err) {
-      alert(err.response?.data?.error || 'Error al crear la orden')
+    if (!user || !token) {
+      console.log('❌ User not logged in');
+      alert('Debes iniciar sesión para crear una orden');
+      return;
     }
+
+    // Verificar que el booster tenga precio configurado
+    const boosterPrice = boosterPrices[selectedBooster.user_id];
+    console.log('boosterPrice:', boosterPrice);
+    
+    if (!boosterPrice || boosterPrice.error) {
+      console.log('❌ No price configured');
+      alert('Este booster no tiene precios configurados para este boost');
+      return;
+    }
+
+    // Abrir el modal de checkout
+    console.log('✅ Opening checkout modal');
+    setShowCheckoutModal(true);
   }
 
   if (!isOpen) return null
 
   return (
+    <>
     <AnimatePresence>
+      {!showCheckoutModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
@@ -342,12 +379,18 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
                           <div>
                             {boosterPrices[booster.user_id].error ? (
                               <>
-                                <p className="text-sm text-yellow-500 font-bold">
-                                  ${boosterPrices[booster.user_id].final_price.toFixed(2)}
-                                </p>
-                                <p className="text-[9px] text-yellow-500/70 uppercase tracking-widest">
-                                  Precio Estimado
-                                </p>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    alert(boosterPrices[booster.user_id].error)
+                                  }}
+                                  className="px-4 py-2 bg-yellow-500/20 border border-yellow-500/50 rounded-lg hover:bg-yellow-500/30 transition-colors"
+                                >
+                                  <span className="text-sm font-bold text-yellow-500 uppercase tracking-wider flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-base">warning</span>
+                                    Sin Precios
+                                  </span>
+                                </button>
                                 <p className="text-[8px] text-white/40 mt-1">
                                   {boosterPrices[booster.user_id].error}
                                 </p>
@@ -355,10 +398,13 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
                             ) : (
                               <>
                                 {orderDetails.boost_type === 'duo' && boosterPrices[booster.user_id].base_price !== boosterPrices[booster.user_id].final_price && (
-                                  <p className="text-xs text-white/40 line-through">
-                                    ${boosterPrices[booster.user_id].base_price.toFixed(2)}
+                                  <p className="text-xs text-white/40 line-through mb-1">
+                                    ${boosterPrices[booster.user_id].base_price.toFixed(2)} ARS
                                   </p>
                                 )}
+                                <p className="text-2xl font-black text-primary mb-2">
+                                  ${boosterPrices[booster.user_id].final_price.toFixed(2)} ARS
+                                </p>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -370,19 +416,13 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
                                       setShowBreakdownModal(true)
                                     }
                                   }}
-                                  className="flex items-center justify-end gap-1 hover:opacity-80 transition-opacity"
+                                  className="px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-lg hover:bg-primary/20 hover:border-primary/50 transition-colors"
                                 >
-                                  <p className="text-2xl font-black text-primary">
-                                    ${boosterPrices[booster.user_id].final_price.toFixed(2)}
-                                  </p>
-                                  {boosterPrices[booster.user_id].breakdown && (
-                                    <span className="material-symbols-outlined text-primary/60 text-sm">info</span>
-                                  )}
+                                  <span className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-sm">visibility</span>
+                                    Ver Precios
+                                  </span>
                                 </button>
-                                <p className="text-[9px] text-white/40 uppercase tracking-widest">
-                                  {boosterPrices[booster.user_id].price_source === 'individual' ? 'Precio Especial' : 'Precio Base'}
-                                  {orderDetails.boost_type === 'duo' && ' + Duo'}
-                                </p>
                               </>
                             )}
                           </div>
@@ -451,6 +491,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
           </div>
         </motion.div>
       </div>
+      )}
 
       {/* Modal de Desglose de Precio */}
       <AnimatePresence>
@@ -533,7 +574,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
                       item.type === 'duo_extra' ? 'text-primary' :
                       'text-white/60'
                     }`}>
-                      ${item.cost.toFixed(2)}
+                      ${item.cost.toFixed(2)} ARS
                     </span>
                   </div>
                 ))}
@@ -542,7 +583,7 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
               {/* Total */}
               <div className="border-t-2 border-primary/30 pt-4">
                 <div className="flex justify-between items-center p-4 bg-primary/10 rounded-lg">
-                  <span className="text-lg font-black uppercase text-primary">Total</span>
+                  <span className="text-lg font-black uppercase text-primary">Total (ARS)</span>
                   <span className="text-3xl font-black text-primary">
                     ${selectedBreakdown.final_price.toFixed(2)}
                   </span>
@@ -553,5 +594,23 @@ export default function BoosterSelector({ isOpen, onClose, orderDetails }) {
         )}
       </AnimatePresence>
     </AnimatePresence>
+
+    {/* Checkout Modal - Fuera del AnimatePresence principal */}
+    {selectedBooster && showCheckoutModal && (
+      <CheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => {
+          setShowCheckoutModal(false);
+          setSelectedBooster(null);
+          onClose(); // Cerrar también el selector de boosters
+        }}
+        booster={selectedBooster}
+        orderData={{
+          ...orderDetails,
+          total_price: boosterPrices[selectedBooster.user_id]?.final_price || orderDetails.total_price
+        }}
+      />
+    )}
+    </>
   )
 }

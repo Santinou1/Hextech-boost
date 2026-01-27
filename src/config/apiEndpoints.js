@@ -36,6 +36,8 @@ export const ORDER_ENDPOINTS = {
   GET_BY_ID: (id) => `/orders/${id}`,
   UPDATE_STATUS: (id) => `/orders/${id}/status`,
   UPDATE_PROGRESS: (id) => `/orders/${id}/progress`,
+  PROCESS_PAYMENT: (orderId) => `/orders/${orderId}/payment`,
+  CANCEL: (id) => `/orders/${id}/cancel`,
 };
 
 /**

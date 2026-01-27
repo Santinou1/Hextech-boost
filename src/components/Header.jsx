@@ -197,6 +197,22 @@ export default function Header() {
                       {user.role === 'booster' && (
                         <>
                           <Link
+                            to="/booster/dashboard"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">dashboard</span>
+                            Mi Panel
+                          </Link>
+                          <Link
+                            to="/booster/orders"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">inventory_2</span>
+                            Mis Órdenes
+                          </Link>
+                          <Link
                             to="/booster/profile"
                             onClick={() => setShowUserMenu(false)}
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
@@ -217,21 +233,52 @@ export default function Header() {
                             onClick={() => setShowUserMenu(false)}
                             className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
                           >
-                            <span className="material-symbols-outlined text-primary text-lg">inventory_2</span>
+                            <span className="material-symbols-outlined text-primary text-lg">sell</span>
                             Precios Bulk
                           </Link>
                         </>
                       )}
                       
                       {user.role === 'client' && (
-                        <Link
-                          to="/user-progress"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-primary text-lg">dashboard</span>
-                          Mi Panel
-                        </Link>
+                        <>
+                          <Link
+                            to="/dashboard"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">dashboard</span>
+                            Mi Panel
+                          </Link>
+                          <Link
+                            to="/orders"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">shopping_bag</span>
+                            Mis Órdenes
+                          </Link>
+                        </>
+                      )}
+
+                      {user.role === 'admin' && (
+                        <>
+                          <Link
+                            to="/admin"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-red-500 text-lg">admin_panel_settings</span>
+                            Panel Admin
+                          </Link>
+                          <Link
+                            to="/admin/payments"
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-hextech-dark transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-primary text-lg">payments</span>
+                            Gestión de Pagos
+                          </Link>
+                        </>
                       )}
 
                       <button

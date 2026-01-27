@@ -11,7 +11,8 @@ export default function CalculatorPage() {
   const [currentDivision, setCurrentDivision] = useState(0) // IV
   const [desiredRank, setDesiredRank] = useState(0) // Iron
   const [desiredDivision, setDesiredDivision] = useState(3) // I
-  const [wins, setWins] = useState(5) // Para Master+
+  const [currentLP, setCurrentLP] = useState(0) // LP actual para Master+
+  const [desiredLP, setDesiredLP] = useState(100) // LP deseado para Master+
   const [extras, setExtras] = useState({ lane: false, offline: false, stream: false })
   const [isDuoBoost, setIsDuoBoost] = useState(false)
   const [champions, setChampions] = useState([])
@@ -242,37 +243,101 @@ export default function CalculatorPage() {
                       src={rank.img}
                       alt={`${rank.name} rank`}
                       isActive={currentRank === idx}
-                      onClick={() => setCurrentRank(idx)}
+                      onClick={() => {
+                        setCurrentRank(idx)
+                        // Si cambia a Master+, resetear LP
+                        if (isHighElo(idx)) {
+                          setCurrentLP(0)
+                          setDesiredLP(100)
+                          // Si el objetivo no es Master+, cambiar a Master
+                          if (!isHighElo(desiredRank)) {
+                            setDesiredRank(7) // Master
+                          }
+                        } else {
+                          // Si cambia a rango normal desde Master+, resetear objetivo si es necesario
+                          if (isHighElo(desiredRank) && desiredRank > 7) {
+                            setDesiredRank(idx < 7 ? 7 : idx) // Master o el rango actual
+                          }
+                        }
+                      }}
                     />
                   ))}
                 </div>
                 
                 <div className="mt-4">
-                  <label className="text-[10px] uppercase tracking-widest text-primary/50 mb-2 block">
-                    División Actual {currentDivisions.length === 1 && '(Solo tiene una división)'}
-                  </label>
-                  <div className={`grid gap-2 ${currentDivisions.length === 4 ? 'grid-cols-4' : 'grid-cols-1'}`}>
-                    {currentDivisions.map((div, idx) => (
-                      <button
-                        key={div}
-                        onClick={() => {
-                          setCurrentDivision(idx)
-                          // Si el rango objetivo es el mismo y la nueva división es mayor o igual, ajustar
-                          if (desiredRank === currentRank && desiredDivision <= idx) {
-                            const nextDivision = Math.min(idx + 1, currentDivisions.length - 1)
-                            setDesiredDivision(nextDivision)
-                          }
-                        }}
-                        className={`py-2 border text-xs font-bold transition-colors ${
-                          currentDivision === idx
-                            ? 'bg-primary text-black border-primary'
-                            : 'bg-hextech-dark border-hextech-border hover:border-primary'
-                        }`}
-                      >
-                        {div}
-                      </button>
-                    ))}
-                  </div>
+                  {isHighElo(currentRank) ? (
+                    // Selector de LP para Master+ como rango actual
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-primary/50 mb-2 block">
+                        LP Actual en {RANKS[currentRank].name}
+                      </label>
+                      <div className="bg-hextech-dark/50 border border-hextech-border rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={currentLP}
+                            onChange={(e) => {
+                              const newLP = parseInt(e.target.value)
+                              setCurrentLP(newLP)
+                              // Si el objetivo es el mismo rango y el LP deseado es menor, ajustar
+                              if (desiredRank === currentRank && desiredLP <= newLP) {
+                                setDesiredLP(newLP + 50)
+                              }
+                            }}
+                            className="flex-1 h-2 bg-hextech-border rounded-lg appearance-none cursor-pointer accent-primary"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={currentLP}
+                            onChange={(e) => {
+                              const newLP = Math.max(0, Math.min(1000, parseInt(e.target.value) || 0))
+                              setCurrentLP(newLP)
+                              if (desiredRank === currentRank && desiredLP <= newLP) {
+                                setDesiredLP(newLP + 50)
+                              }
+                            }}
+                            className="w-20 px-3 py-2 bg-hextech-dark border border-hextech-border rounded text-sm font-bold text-center focus:outline-none focus:border-primary"
+                          />
+                          <span className="text-xs text-white/60 font-bold">LP</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    // Selector de división para rangos normales
+                    <div>
+                      <label className="text-[10px] uppercase tracking-widest text-primary/50 mb-2 block">
+                        División Actual {currentDivisions.length === 1 && '(Solo tiene una división)'}
+                      </label>
+                      <div className={`grid gap-2 ${currentDivisions.length === 4 ? 'grid-cols-4' : 'grid-cols-1'}`}>
+                        {currentDivisions.map((div, idx) => (
+                          <button
+                            key={div}
+                            onClick={() => {
+                              setCurrentDivision(idx)
+                              // Si el rango objetivo es el mismo y la nueva división es mayor o igual, ajustar
+                              if (desiredRank === currentRank && desiredDivision <= idx) {
+                                const nextDivision = Math.min(idx + 1, currentDivisions.length - 1)
+                                setDesiredDivision(nextDivision)
+                              }
+                            }}
+                            className={`py-2 border text-xs font-bold transition-colors ${
+                              currentDivision === idx
+                                ? 'bg-primary text-black border-primary'
+                                : 'bg-hextech-dark border-hextech-border hover:border-primary'
+                            }`}
+                          >
+                            {div}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -282,27 +347,61 @@ export default function CalculatorPage() {
                   <span className="material-symbols-outlined text-accent-gold/40">military_tech</span>
                 </div>
                 
-                {/* Mensaje informativo para Master+ */}
+                {/* Mensaje informativo para GM/Challenger */}
                 {!isHighElo(currentRank) && (
                   <div className="bg-primary/10 border border-primary/30 rounded p-3 flex items-start gap-2">
                     <span className="material-symbols-outlined text-primary text-sm mt-0.5">info</span>
                     <p className="text-[10px] text-primary/90 leading-relaxed">
-                      <span className="font-bold">NOTA:</span> Para acceder a Master, Grandmaster o Challenger, primero debes alcanzar Diamond I. 
-                      No se pueden saltar rangos intermedios.
+                      <span className="font-bold">NOTA:</span> Grandmaster y Challenger solo son accesibles desde Master. 
+                      Master está disponible desde cualquier rango.
+                    </p>
+                  </div>
+                )}
+                
+                {/* Mensaje para Master+ */}
+                {isHighElo(currentRank) && (
+                  <div className="bg-accent-gold/10 border border-accent-gold/30 rounded p-3 flex items-start gap-2">
+                    <span className="material-symbols-outlined text-accent-gold text-sm mt-0.5">info</span>
+                    <p className="text-[10px] text-accent-gold/90 leading-relaxed">
+                      <span className="font-bold">MASTER+:</span> Puedes comprar LP en tu rango actual o avanzar a rangos superiores.
                     </p>
                   </div>
                 )}
                 
                 <div className="grid grid-cols-4 gap-2">
                   {RANKS.map((rank, idx) => {
-                    // Para rangos normales
                     const isMaxDivision = currentDivision === currentDivisions.length - 1
                     
-                    // Si el objetivo es Master+ pero el usuario no está en Diamond I, deshabilitar
-                    const canAccessHighElo = currentRank === 6 && currentDivision === 3 // Diamond I
-                    const isDisabled = idx < currentRank || 
-                                      (idx === currentRank && isMaxDivision && !isHighElo(idx)) ||
-                                      (isHighElo(idx) && !canAccessHighElo)
+                    let isDisabled = false
+                    
+                    // Lógica de validación según el rango actual
+                    if (isHighElo(currentRank)) {
+                      // Si estás en Master+, puedes:
+                      // - Quedarte en el mismo rango (comprar LP)
+                      // - Ir a rangos Master+ superiores
+                      // - NO puedes ir a rangos inferiores
+                      if (idx < 7) {
+                        // No puede ir a rangos normales desde Master+
+                        isDisabled = true
+                      } else if (idx < currentRank) {
+                        // No puede ir a un rango Master+ inferior
+                        isDisabled = true
+                      }
+                      // idx >= currentRank && idx >= 7 está permitido (mismo rango o superior Master+)
+                    } else {
+                      // Si estás en rango normal:
+                      if (idx < currentRank) {
+                        // No puede ir a un rango inferior
+                        isDisabled = true
+                      } else if (idx === currentRank && isMaxDivision) {
+                        // Mismo rango, ya está en la división máxima
+                        isDisabled = true
+                      } else if (idx === 8 || idx === 9) {
+                        // GM (8) y Challenger (9) solo desde Master (7)
+                        isDisabled = true
+                      }
+                      // Master (7) está disponible desde cualquier rango
+                    }
                     
                     return (
                       <RankIcon
@@ -313,17 +412,28 @@ export default function CalculatorPage() {
                         isDisabled={isDisabled}
                         onClick={() => {
                           if (!isDisabled) {
+                            setDesiredRank(idx)
                             if (isHighElo(idx)) {
-                              // Master, Grandmaster, Challenger - sistema de wins
-                              setDesiredRank(idx)
-                              setWins(5) // Reset a 5 wins por defecto
+                              // Master, Grandmaster, Challenger - sistema de LP
+                              if (isHighElo(currentRank)) {
+                                // Ya está en Master+
+                                if (idx === currentRank) {
+                                  // Mismo rango Master+, mantener LP actual y ajustar deseado
+                                  setDesiredLP(Math.max(currentLP + 100, 100))
+                                } else {
+                                  // Cambio a rango Master+ superior, resetear LP
+                                  setDesiredLP(100)
+                                }
+                              } else {
+                                // Viene de rango normal a Master+
+                                setCurrentLP(0)
+                                setDesiredLP(100)
+                              }
                             } else if (idx > currentRank) {
                               // Rango superior normal
-                              setDesiredRank(idx)
                               setDesiredDivision(0)
                             } else if (idx === currentRank && !isMaxDivision) {
                               // Mismo rango, división superior
-                              setDesiredRank(idx)
                               setDesiredDivision(currentDivision + 1)
                             }
                           }
@@ -335,42 +445,100 @@ export default function CalculatorPage() {
                 
                 <div className="mt-4">
                   <label className="text-[10px] uppercase tracking-widest text-accent-gold/50 mb-2 block">
-                    {isHighElo(desiredRank) ? 'Cantidad de Wins' : `División Objetivo ${desiredDivisions.length === 1 ? '(Solo tiene una división)' : ''}`}
+                    {isHighElo(desiredRank) ? 'League Points (LP)' : `División Objetivo ${desiredDivisions.length === 1 ? '(Solo tiene una división)' : ''}`}
                   </label>
                   
                   {isHighElo(desiredRank) ? (
-                    // Selector de wins para Master+
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-4">
-                        <button
-                          onClick={() => setWins(Math.max(1, wins - 1))}
-                          className="size-10 bg-hextech-dark border border-hextech-border hover:border-accent-gold text-accent-gold font-bold text-xl rounded transition-colors"
-                        >
-                          -
-                        </button>
-                        <div className="flex-1 text-center">
-                          <div className="text-4xl font-black text-accent-gold">{wins}</div>
-                          <div className="text-[10px] text-white/40 uppercase tracking-widest">Victorias</div>
+                    // Selector de LP para Master+
+                    <div className="space-y-4">
+                      {/* LP Actual */}
+                      {isHighElo(currentRank) && currentRank === desiredRank && (
+                        <div className="bg-hextech-dark/50 border border-hextech-border rounded-lg p-4">
+                          <label className="text-[9px] uppercase tracking-widest text-white/40 mb-2 block">LP Actual</label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="range"
+                              min="0"
+                              max="1000"
+                              step="10"
+                              value={currentLP}
+                              onChange={(e) => {
+                                const newLP = parseInt(e.target.value)
+                                setCurrentLP(newLP)
+                                if (desiredLP <= newLP) {
+                                  setDesiredLP(newLP + 50)
+                                }
+                              }}
+                              className="flex-1 h-2 bg-hextech-border rounded-lg appearance-none cursor-pointer accent-primary"
+                            />
+                            <input
+                              type="number"
+                              min="0"
+                              max="1000"
+                              step="10"
+                              value={currentLP}
+                              onChange={(e) => {
+                                const newLP = Math.max(0, Math.min(1000, parseInt(e.target.value) || 0))
+                                setCurrentLP(newLP)
+                                if (desiredLP <= newLP) {
+                                  setDesiredLP(newLP + 50)
+                                }
+                              }}
+                              className="w-20 px-3 py-2 bg-hextech-dark border border-hextech-border rounded text-sm font-bold text-center focus:outline-none focus:border-primary"
+                            />
+                            <span className="text-xs text-white/60 font-bold">LP</span>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => setWins(wins + 1)}
-                          className="size-10 bg-hextech-dark border border-hextech-border hover:border-accent-gold text-accent-gold font-bold text-xl rounded transition-colors"
-                        >
-                          +
-                        </button>
+                      )}
+                      
+                      {/* LP Deseado */}
+                      <div className="bg-hextech-dark/50 border border-accent-gold/30 rounded-lg p-4">
+                        <label className="text-[9px] uppercase tracking-widest text-accent-gold/60 mb-2 block">
+                          LP Objetivo en {RANKS[desiredRank].name}
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min={isHighElo(currentRank) && currentRank === desiredRank ? currentLP + 50 : 0}
+                            max="1000"
+                            step="10"
+                            value={desiredLP}
+                            onChange={(e) => setDesiredLP(parseInt(e.target.value))}
+                            className="flex-1 h-2 bg-hextech-border rounded-lg appearance-none cursor-pointer accent-accent-gold"
+                          />
+                          <input
+                            type="number"
+                            min={isHighElo(currentRank) && currentRank === desiredRank ? currentLP + 50 : 0}
+                            max="1000"
+                            step="10"
+                            value={desiredLP}
+                            onChange={(e) => {
+                              const minLP = isHighElo(currentRank) && currentRank === desiredRank ? currentLP + 50 : 0
+                              const newLP = Math.max(minLP, Math.min(1000, parseInt(e.target.value) || 0))
+                              setDesiredLP(newLP)
+                            }}
+                            className="w-20 px-3 py-2 bg-hextech-dark border border-accent-gold/30 rounded text-sm font-bold text-center text-accent-gold focus:outline-none focus:border-accent-gold"
+                          />
+                          <span className="text-xs text-accent-gold/60 font-bold">LP</span>
+                        </div>
+                        <p className="text-[9px] text-white/40 mt-2">
+                          Cada 50 LP = 1 tarifa. Total: {Math.ceil((desiredLP - (isHighElo(currentRank) && currentRank === desiredRank ? currentLP : 0)) / 50)} tarifas
+                        </p>
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[5, 10, 20].map((amount) => (
+                      
+                      {/* Presets rápidos */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {[100, 200, 400, 600].map((lp) => (
                           <button
-                            key={amount}
-                            onClick={() => setWins(amount)}
+                            key={lp}
+                            onClick={() => setDesiredLP(lp)}
                             className={`py-2 border text-xs font-bold transition-colors ${
-                              wins === amount
+                              desiredLP === lp
                                 ? 'bg-accent-gold text-black border-accent-gold'
                                 : 'bg-hextech-dark border-hextech-border hover:border-accent-gold'
                             }`}
                           >
-                            {amount} Wins
+                            {lp} LP
                           </button>
                         ))}
                       </div>
@@ -508,114 +676,73 @@ export default function CalculatorPage() {
                 )}
               </div>
 
-              <div className="bg-hextech-surface border border-hextech-border p-6 rounded-lg backdrop-blur-sm">
-                <h4 className="text-xs font-bold tracking-[0.2em] uppercase text-primary mb-6 border-b border-hextech-border pb-4">
-                  Servicios Extra
-                </h4>
-                <div className="space-y-4">
-                  {EXTRA_SERVICES.map(({ key, icon, label, extra }) => (
-                    <div key={key} className="flex items-center justify-between p-3 bg-hextech-dark/50 border border-white/5 rounded">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-primary text-sm">{icon}</span>
-                        <span className="text-xs font-semibold uppercase tracking-tight">
-                          {label} {extra && <span className="text-primary/70 ml-1">{extra}</span>}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => setExtras({ ...extras, [key]: !extras[key] })}
-                        className={`w-10 h-5 rounded-full relative p-0.5 flex items-center transition-colors ${
-                          extras[key] ? 'bg-primary' : 'bg-hextech-border'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded-full transition-all ${
-                          extras[key] ? 'bg-black ml-auto' : 'bg-white/20'
-                        }`}></div>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-hextech-surface border-2 border-accent-gold p-8 rounded-lg flex flex-col items-center gap-4 glow-gold relative overflow-hidden">
+              <div className="bg-hextech-surface border-2 border-primary p-8 rounded-lg flex flex-col items-center gap-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-2 opacity-10">
-                  <span className="material-symbols-outlined text-6xl">account_balance_wallet</span>
+                  <span className="material-symbols-outlined text-8xl">groups</span>
                 </div>
-                <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-accent-gold/60">Total Estimado</span>
                 
-                {/* Precio con tooltip */}
-                <div className="relative">
-                  <button
-                    onMouseEnter={() => setShowPriceBreakdown(true)}
-                    onMouseLeave={() => setShowPriceBreakdown(false)}
-                    onClick={() => setShowPriceBreakdown(!showPriceBreakdown)}
-                    className="flex items-baseline gap-1 cursor-help hover:opacity-80 transition-opacity"
-                  >
-                    <span className="text-4xl font-black italic">$</span>
-                    <span className="text-6xl font-black italic tracking-tighter">{calculatePrice()}</span>
-                    <span className="material-symbols-outlined text-accent-gold/60 text-2xl ml-2">info</span>
-                  </button>
+                {/* Ícono principal */}
+                <div className="flex items-center justify-center w-20 h-20 rounded-full bg-primary/20 border-2 border-primary">
+                  <span className="material-symbols-outlined text-5xl text-primary">person_search</span>
+                </div>
 
-                  {/* Tooltip de desglose */}
-                  {showPriceBreakdown && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-80 bg-hextech-dark border-2 border-accent-gold rounded-lg shadow-[0_0_30px_rgba(255,215,0,0.3)] z-50 p-4">
-                      <div className="flex items-center justify-between mb-3 pb-2 border-b border-hextech-border">
-                        <h3 className="text-sm font-bold text-accent-gold uppercase tracking-wider">Desglose del Precio</h3>
-                        <span className="material-symbols-outlined text-accent-gold text-sm">receipt</span>
-                      </div>
-                      
-                      <div className="space-y-2 mb-3">
-                        {getPriceBreakdown().breakdown.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center text-xs">
-                            <span className={`${
-                              item.type === 'base' ? 'text-white font-bold' :
-                              item.type === 'extra' ? 'text-primary' :
-                              'text-white/60'
-                            }`}>
-                              {item.label}
-                            </span>
-                            <span className={`font-bold ${
-                              item.type === 'base' ? 'text-white' :
-                              item.type === 'extra' ? 'text-primary' :
-                              'text-white/60'
-                            }`}>
-                              +${item.value.toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <div className="border-t border-accent-gold/30 pt-3 flex justify-between items-center">
-                        <span className="text-sm font-black uppercase text-accent-gold">Total</span>
-                        <span className="text-2xl font-black text-accent-gold">
-                          ${getPriceBreakdown().total.toFixed(2)}
-                        </span>
-                      </div>
+                {/* Título */}
+                <div className="text-center">
+                  <h3 className="text-2xl font-black uppercase tracking-tight text-primary mb-2">
+                    Encuentra tu Booster
+                  </h3>
+                  <p className="text-xs text-white/60 leading-relaxed max-w-sm">
+                    Hextech Boost es una plataforma donde boosters profesionales crean sus perfiles y establecen sus propias tarifas. 
+                    Cada booster configura sus precios según su experiencia y disponibilidad.
+                  </p>
+                </div>
 
-                      {/* Flecha del tooltip */}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-2">
-                        <div className="w-4 h-4 bg-hextech-dark border-r-2 border-b-2 border-accent-gold rotate-45"></div>
-                      </div>
-                    </div>
+                {/* Resumen de la configuración */}
+                <div className="w-full bg-hextech-dark/50 border border-hextech-border rounded-lg p-4">
+                  <p className="text-xs text-white/80 text-center font-semibold mb-2">
+                    Tu configuración:
+                  </p>
+                  <p className="text-sm text-primary text-center font-bold">
+                    {isHighElo(desiredRank) 
+                      ? isHighElo(currentRank) && currentRank === desiredRank
+                        ? `${RANKS[currentRank].name} ${currentLP} LP → ${desiredLP} LP`
+                        : isHighElo(currentRank)
+                        ? `${RANKS[currentRank].name} ${currentLP} LP → ${RANKS[desiredRank].name} ${desiredLP} LP`
+                        : `${RANKS[currentRank].name} ${currentDivisions[currentDivision]} → ${RANKS[desiredRank].name} ${desiredLP} LP`
+                      : `${RANKS[currentRank].name} ${currentDivisions[currentDivision]} → ${RANKS[desiredRank].name} ${desiredDivisions[desiredDivision]}`
+                    }
+                  </p>
+                  {(isDuoBoost || selectedChampion) && (
+                    <p className="text-xs text-white/50 text-center mt-1">
+                      {isDuoBoost && 'Duo Boost'}
+                      {isDuoBoost && selectedChampion && ' • '}
+                      {selectedChampion && selectedChampion.name}
+                    </p>
                   )}
                 </div>
 
-                <p className="text-[10px] text-white/40 uppercase tracking-widest text-center">
-                  {isHighElo(desiredRank) 
-                    ? `${wins} Victorias en ${RANKS[desiredRank].name}`
-                    : `De ${RANKS[currentRank].name} ${currentDivisions[currentDivision]} a ${RANKS[desiredRank].name} ${desiredDivisions[desiredDivision]}`
-                  }
-                  {isDuoBoost && ' • Duo Boost'}
-                  {selectedChampion && ` • ${selectedChampion.name}`}
-                </p>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest text-center">
-                  Entrega estimada: 48-72 Horas
-                </p>
+                {/* Características */}
+                <div className="w-full space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-white/70">
+                    <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
+                    <span>Compara precios de múltiples boosters</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/70">
+                    <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
+                    <span>Cada booster establece sus tarifas</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-white/70">
+                    <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
+                    <span>Elige según precio, rating y experiencia</span>
+                  </div>
+                </div>
+                
                 <button 
                   onClick={() => setShowBoosterSelector(true)}
-                  className="w-full mt-2 py-4 bg-accent-gold hover:bg-accent-gold/90 text-black font-black uppercase tracking-[0.15em] transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-primary hover:bg-primary/90 text-black font-black uppercase tracking-[0.15em] transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(0,209,181,0.3)]"
                 >
-                  <span>Buscar Booster</span>
-                  <span className="material-symbols-outlined">person_search</span>
+                  <span>Ver Boosters Disponibles</span>
+                  <span className="material-symbols-outlined">arrow_forward</span>
                 </button>
               </div>
             </div>
@@ -632,13 +759,14 @@ export default function CalculatorPage() {
         orderDetails={{
           boost_type: isDuoBoost ? 'duo' : 'solo',
           current_rank: RANKS[currentRank].name,
-          current_division: currentDivisions[currentDivision],
+          current_division: isHighElo(currentRank) ? null : currentDivisions[currentDivision],
+          current_lp: isHighElo(currentRank) ? currentLP : null,
           desired_rank: RANKS[desiredRank].name,
           desired_division: isHighElo(desiredRank) ? null : desiredDivisions[desiredDivision],
-          wins_requested: isHighElo(desiredRank) ? wins : null,
+          desired_lp: isHighElo(desiredRank) ? desiredLP : null,
           selected_champion: selectedChampion?.name || null,
           extras: JSON.stringify(extras),
-          total_price: parseFloat(calculatePrice())
+          total_price: 0 // Ya no usamos precio calculado aquí
         }}
       />
     </div>

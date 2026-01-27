@@ -7,7 +7,7 @@ import Footer from '../components/Footer';
 import PageTransition from '../components/PageTransition';
 import { motion } from 'framer-motion';
 
-const LEAGUES = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Diamond'];
+const LEAGUES = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Emerald', 'Diamond', 'Master', 'Grandmaster', 'Challenger'];
 
 const TRANSITIONS = [
   { key: 'Iron->Bronze', label: 'Hierro → Bronce' },
@@ -15,7 +15,8 @@ const TRANSITIONS = [
   { key: 'Silver->Gold', label: 'Plata → Oro' },
   { key: 'Gold->Platinum', label: 'Oro → Platino' },
   { key: 'Platinum->Emerald', label: 'Platino → Esmeralda' },
-  { key: 'Emerald->Diamond', label: 'Esmeralda → Diamante' }
+  { key: 'Emerald->Diamond', label: 'Esmeralda → Diamante' },
+  { key: 'Diamond->Master', label: 'Diamante → Master' }
 ];
 
 export default function BulkPricingPage() {
@@ -33,14 +34,19 @@ export default function BulkPricingPage() {
   // Estado de calculadora
   const [fromLeague, setFromLeague] = useState('Iron');
   const [fromDivision, setFromDivision] = useState('IV');
+  const [fromLP, setFromLP] = useState(0);
   const [toLeague, setToLeague] = useState('Iron');
   const [toDivision, setToDivision] = useState('I');
+  const [toLP, setToLP] = useState(100);
   const [calculatedPrice, setCalculatedPrice] = useState(null);
   
   // Estado de UI
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  
+  // Helper para saber si es Master+
+  const isHighElo = (league) => ['Master', 'Grandmaster', 'Challenger'].includes(league);
 
   useEffect(() => {
     if (!user || user.role !== 'booster') {
@@ -67,7 +73,10 @@ export default function BulkPricingPage() {
           Gold: 10.00,
           Platinum: 15.00,
           Emerald: 20.00,
-          Diamond: 30.00
+          Diamond: 30.00,
+          Master: 50.00,
+          Grandmaster: 70.00,
+          Challenger: 90.00
         });
         setTransitionCosts({
           'Iron->Bronze': 10.00,
@@ -75,7 +84,8 @@ export default function BulkPricingPage() {
           'Silver->Gold': 15.00,
           'Gold->Platinum': 20.00,
           'Platinum->Emerald': 25.00,
-          'Emerald->Diamond': 35.00
+          'Emerald->Diamond': 35.00,
+          'Diamond->Master': 50.00
         });
       }
     } catch (error) {
@@ -161,50 +171,46 @@ export default function BulkPricingPage() {
     try {
       setCalculating(true);
       
-      // Usar el endpoint UNIFICADO que considera precios individuales primero
-      const response = await pricingService.calculatePrice(user.id, {
+      // Construir parámetros según si usa LP o divisiones
+      const params = {
         from_rank: fromLeague,
-        from_division: fromDivision,
         to_rank: toLeague,
-        to_division: toDivision,
         boost_type: 'solo'
-      });
+      };
+      
+      // Agregar LP o divisiones según el tipo de rango
+      if (isHighElo(fromLeague)) {
+        params.from_lp = fromLP;
+      } else {
+        params.from_division = fromDivision;
+      }
+      
+      if (isHighElo(toLeague)) {
+        params.to_lp = toLP;
+      } else {
+        params.to_division = toDivision;
+      }
+      
+      console.log('Calculating price with params:', params);
+      
+      // Usar el endpoint UNIFICADO que considera precios individuales primero
+      const response = await pricingService.calculatePrice(user.id, params);
       
       console.log('Price calculated:', response.data);
       
-      // Adaptar la respuesta al formato esperado
-      if (response.data.price_source === 'individual') {
-        // Si es precio individual, mostrar de forma simple
-        setCalculatedPrice({
-          total: response.data.base_price,
-          breakdown: [{
-            type: 'individual',
-            description: 'Precio individual configurado',
-            cost: response.data.base_price
-          }],
-          source: 'individual'
-        });
-      } else {
-        // Si es bulk, necesitamos recalcular para obtener el desglose
-        const bulkResponse = await bulkPricingService.calculate({
-          boosterId: user.id,
-          fromLeague,
-          fromDivision,
-          toLeague,
-          toDivision
-        });
-        setCalculatedPrice({
-          ...bulkResponse.data.data,
-          source: 'bulk'
-        });
-      }
+      // Mostrar el resultado con el breakdown
+      setCalculatedPrice({
+        total: response.data.final_price,
+        breakdown: response.data.breakdown || [],
+        source: response.data.price_source
+      });
     } catch (error) {
       console.error('Error calculating price:', error);
       console.error('Error response:', error.response?.data);
       
-      // Si el error es 404, significa que no hay configuración guardada
-      if (error.response?.status === 404) {
-        console.log('No configuration saved on server');
+      // Mostrar el error al usuario
+      if (error.response?.data?.error) {
+        alert('Error al calcular precio: ' + error.response.data.error);
       }
       
       setCalculatedPrice(null);
@@ -229,18 +235,42 @@ export default function BulkPricingPage() {
 
   // Auto-calcular cuando cambian los selectores
   useEffect(() => {
-    if (fromLeague && fromDivision && toLeague && toDivision && user?.id) {
-      // Validar que el destino sea mayor que el origen antes de calcular
-      const fromPos = getRankPosition(fromLeague, fromDivision);
-      const toPos = getRankPosition(toLeague, toDivision);
+    if (fromLeague && toLeague && user?.id) {
+      // Validar según el tipo de rango
+      let isValid = false;
       
-      if (toPos > fromPos) {
-        handleCalculate();
+      if (isHighElo(fromLeague) && isHighElo(toLeague)) {
+        // Ambos Master+: validar LP
+        if (fromLeague === toLeague) {
+          // Mismo rango: LP destino debe ser mayor
+          isValid = toLP > fromLP;
+        } else {
+          // Diferentes rangos: rango destino debe ser superior
+          const fromIdx = ['Master', 'Grandmaster', 'Challenger'].indexOf(fromLeague);
+          const toIdx = ['Master', 'Grandmaster', 'Challenger'].indexOf(toLeague);
+          isValid = toIdx > fromIdx;
+        }
+      } else if (!isHighElo(fromLeague) && !isHighElo(toLeague)) {
+        // Ambos rangos normales: validar posición
+        const fromPos = getRankPosition(fromLeague, fromDivision);
+        const toPos = getRankPosition(toLeague, toDivision);
+        isValid = toPos > fromPos;
+      } else {
+        // Mixto: siempre válido si va hacia Master+
+        isValid = isHighElo(toLeague);
+      }
+      
+      if (isValid) {
+        // Pequeño delay para evitar múltiples llamadas
+        const timer = setTimeout(() => {
+          handleCalculate();
+        }, 300);
+        return () => clearTimeout(timer);
       } else {
         setCalculatedPrice(null);
       }
     }
-  }, [fromLeague, fromDivision, toLeague, toDivision, user]);
+  }, [fromLeague, fromDivision, fromLP, toLeague, toDivision, toLP, user]);
 
   if (!user || user.role !== 'booster') {
     return null;
@@ -257,7 +287,7 @@ export default function BulkPricingPage() {
               Configuración de <span className="text-primary">Precios Bulk</span>
             </h1>
             <p className="text-white/60 mb-4">
-              Configura precios de forma masiva en lugar de uno por uno
+              Configura precios de forma masiva en lugar de uno por uno. Todos los precios en Pesos Argentinos (ARS).
             </p>
             
             {/* Info Box */}
@@ -266,9 +296,11 @@ export default function BulkPricingPage() {
                 ¿Cómo funciona?
               </h3>
               <ul className="text-sm text-white/80 space-y-1 list-disc list-inside">
-                <li><strong>Precio por Liga:</strong> Define cuánto vale cada división dentro de una liga (ej: cada división de Hierro = $5)</li>
+                <li><strong>Precio por Liga (Iron-Diamond):</strong> Define cuánto vale cada división dentro de una liga (ej: cada división de Hierro = $5)</li>
+                <li><strong>Precio por Liga (Master+):</strong> Define cuánto vale cada 50 LP (ej: Master = $50 por cada 50 LP)</li>
                 <li><strong>Costo de Transición:</strong> Costo adicional al pasar de una liga a otra (ej: Hierro→Bronce = +$10)</li>
-                <li><strong>Ejemplo:</strong> Hierro IV → Bronce I = (3 pasos × $5) + $10 transición + (3 pasos × $6) = $43</li>
+                <li><strong>Ejemplo Normal:</strong> Hierro IV → Bronce I = (3 pasos × $5) + $10 transición + (3 pasos × $6) = $43</li>
+                <li><strong>Ejemplo Master+:</strong> Master 100 LP → Master 400 LP = 300 LP / 50 = 6 tarifas × $50 = $300</li>
               </ul>
             </div>
           </div>
@@ -289,25 +321,25 @@ export default function BulkPricingPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center">
                     <div className="text-3xl font-black text-primary">
-                      ${Math.min(...Object.values(leagueBasePrices).filter(v => v > 0)) || 0}
+                      ${Math.min(...Object.values(leagueBasePrices).filter(v => v > 0)) || 0} ARS
                     </div>
                     <div className="text-xs text-white/60 mt-1">Precio más bajo por división</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-black text-primary">
-                      ${Math.max(...Object.values(leagueBasePrices)) || 0}
+                      ${Math.max(...Object.values(leagueBasePrices)) || 0} ARS
                     </div>
                     <div className="text-xs text-white/60 mt-1">Precio más alto por división</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-black text-primary">
-                      ${Math.min(...Object.values(transitionCosts).filter(v => v > 0)) || 0}
+                      ${Math.min(...Object.values(transitionCosts).filter(v => v > 0)) || 0} ARS
                     </div>
                     <div className="text-xs text-white/60 mt-1">Transición más barata</div>
                   </div>
                   <div className="text-center">
                     <div className="text-3xl font-black text-primary">
-                      ${Math.max(...Object.values(transitionCosts)) || 0}
+                      ${Math.max(...Object.values(transitionCosts)) || 0} ARS
                     </div>
                     <div className="text-xs text-white/60 mt-1">Transición más cara</div>
                   </div>
@@ -318,10 +350,10 @@ export default function BulkPricingPage() {
               <div className="bg-hextech-surface border border-hextech-border rounded-xl p-6">
                 <h2 className="text-2xl font-bold mb-4">Precios Base por Liga</h2>
                 <p className="text-white/60 text-sm mb-2">
-                  Define cuánto vale <strong>cada división</strong> dentro de cada liga
+                  Define cuánto vale <strong>cada división</strong> (Iron-Diamond) o <strong>cada 50 LP</strong> (Master+)
                 </p>
                 <p className="text-white/40 text-xs mb-4">
-                  Ejemplo: Si Hierro = $5, entonces Hierro IV → Hierro III = $5, Hierro III → Hierro II = $5, etc.
+                  Ejemplo: Si Hierro = $5, entonces Hierro IV → Hierro III = $5. Si Master = $50, entonces cada 50 LP en Master = $50
                 </p>
                 
                 {/* Aplicación masiva */}
@@ -352,29 +384,37 @@ export default function BulkPricingPage() {
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {LEAGUES.map((league) => (
-                    <div key={league} className="space-y-2">
-                      <label className="block text-sm font-bold text-white/80">
-                        {league}
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-500 font-bold">
-                          $
-                        </span>
-                        <input
-                          type="number"
-                          value={leagueBasePrices[league] || ''}
-                          onChange={(e) => setLeagueBasePrices({
-                            ...leagueBasePrices,
-                            [league]: parseFloat(e.target.value) || 0
-                          })}
-                          step="0.01"
-                          min="0"
-                          className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 pl-8 text-white focus:border-primary transition"
-                        />
+                  {LEAGUES.map((league) => {
+                    const isMasterPlus = ['Master', 'Grandmaster', 'Challenger'].includes(league);
+                    return (
+                      <div key={league} className="space-y-2">
+                        <label className="block text-sm font-bold text-white/80 flex items-center gap-2">
+                          {league}
+                          {isMasterPlus && (
+                            <span className="text-[10px] text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded">
+                              por 50 LP
+                            </span>
+                          )}
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-500 font-bold">
+                            $
+                          </span>
+                          <input
+                            type="number"
+                            value={leagueBasePrices[league] || ''}
+                            onChange={(e) => setLeagueBasePrices({
+                              ...leagueBasePrices,
+                              [league]: parseFloat(e.target.value) || 0
+                            })}
+                            step="0.01"
+                            min="0"
+                            className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 pl-8 text-white focus:border-primary transition"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -482,12 +522,12 @@ export default function BulkPricingPage() {
                       </div>
                       <div className="text-white/60 text-xs space-y-1">
                         <div>• 3 pasos en Hierro</div>
-                        <div>• 3 × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)}</div>
+                        <div>• 3 × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)} ARS</div>
                       </div>
                       <div className="border-t border-hextech-border pt-2 mt-2">
                         <div className="flex justify-between font-bold">
                           <span>Total:</span>
-                          <span className="text-primary">${((leagueBasePrices.Iron || 0) * 3).toFixed(2)}</span>
+                          <span className="text-primary">${((leagueBasePrices.Iron || 0) * 3).toFixed(2)} ARS</span>
                         </div>
                       </div>
                     </div>
@@ -501,9 +541,9 @@ export default function BulkPricingPage() {
                         <span className="text-white/80">Hierro IV → Bronce I</span>
                       </div>
                       <div className="text-white/60 text-xs space-y-1">
-                        <div>• 3 pasos en Hierro × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)}</div>
-                        <div>• Transición Hierro→Bronce = ${transitionCosts['Iron->Bronze'] || 0}</div>
-                        <div>• 3 pasos en Bronce × ${leagueBasePrices.Bronze || 0} = ${((leagueBasePrices.Bronze || 0) * 3).toFixed(2)}</div>
+                        <div>• 3 pasos en Hierro × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)} ARS</div>
+                        <div>• Transición Hierro→Bronce = ${transitionCosts['Iron->Bronze'] || 0} ARS</div>
+                        <div>• 3 pasos en Bronce × ${leagueBasePrices.Bronze || 0} = ${((leagueBasePrices.Bronze || 0) * 3).toFixed(2)} ARS</div>
                       </div>
                       <div className="border-t border-hextech-border pt-2 mt-2">
                         <div className="flex justify-between font-bold">
@@ -513,7 +553,7 @@ export default function BulkPricingPage() {
                               (leagueBasePrices.Iron || 0) * 3 + 
                               (transitionCosts['Iron->Bronze'] || 0) + 
                               (leagueBasePrices.Bronze || 0) * 3
-                            ).toFixed(2)}
+                            ).toFixed(2)} ARS
                           </span>
                         </div>
                       </div>
@@ -528,10 +568,10 @@ export default function BulkPricingPage() {
                         <span className="text-white/80">Hierro IV → Plata IV</span>
                       </div>
                       <div className="text-white/60 text-xs space-y-1">
-                        <div>• 3 pasos en Hierro × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)}</div>
-                        <div>• Transición Hierro→Bronce = ${transitionCosts['Iron->Bronze'] || 0}</div>
-                        <div>• 4 pasos en Bronce × ${leagueBasePrices.Bronze || 0} = ${((leagueBasePrices.Bronze || 0) * 4).toFixed(2)}</div>
-                        <div>• Transición Bronce→Plata = ${transitionCosts['Bronze->Silver'] || 0}</div>
+                        <div>• 3 pasos en Hierro × ${leagueBasePrices.Iron || 0} = ${((leagueBasePrices.Iron || 0) * 3).toFixed(2)} ARS</div>
+                        <div>• Transición Hierro→Bronce = ${transitionCosts['Iron->Bronze'] || 0} ARS</div>
+                        <div>• 4 pasos en Bronce × ${leagueBasePrices.Bronze || 0} = ${((leagueBasePrices.Bronze || 0) * 4).toFixed(2)} ARS</div>
+                        <div>• Transición Bronce→Plata = ${transitionCosts['Bronze->Silver'] || 0} ARS</div>
                       </div>
                       <div className="border-t border-hextech-border pt-2 mt-2">
                         <div className="flex justify-between font-bold">
@@ -542,7 +582,7 @@ export default function BulkPricingPage() {
                               (transitionCosts['Iron->Bronze'] || 0) + 
                               (leagueBasePrices.Bronze || 0) * 4 + 
                               (transitionCosts['Bronze->Silver'] || 0)
-                            ).toFixed(2)}
+                            ).toFixed(2)} ARS
                           </span>
                         </div>
                       </div>
@@ -571,7 +611,7 @@ export default function BulkPricingPage() {
                               (transitionCosts['Bronze->Silver'] || 0) + 
                               (leagueBasePrices.Silver || 0) * 4 + 
                               (transitionCosts['Silver->Gold'] || 0)
-                            ).toFixed(2)}
+                            ).toFixed(2)} ARS
                           </span>
                         </div>
                       </div>
@@ -590,9 +630,13 @@ export default function BulkPricingPage() {
                   <p className="text-white/80 text-xs flex items-start gap-2">
                     <span className="text-primary text-lg font-bold">i</span>
                     <span>
-                      <strong>Nota:</strong> Si tienes un precio individual configurado para esta combinación específica en 
-                      <a href="/booster/pricing" className="text-primary hover:underline mx-1">Precios Individuales</a>, 
-                      ese precio tendrá prioridad sobre el cálculo bulk.
+                      <strong>Nota:</strong> Para rangos normales (Iron-Diamond) usa divisiones. Para Master+ usa LP.
+                      {!isHighElo(fromLeague) && !isHighElo(toLeague) && (
+                        <span> Si tienes un precio individual configurado para esta combinación en 
+                          <a href="/booster/pricing" className="text-primary hover:underline mx-1">Precios Individuales</a>, 
+                          ese precio tendrá prioridad.
+                        </span>
+                      )}
                     </span>
                   </p>
                 </div>
@@ -601,19 +645,51 @@ export default function BulkPricingPage() {
                   {/* Desde */}
                   <div className="space-y-4">
                     <h3 className="font-bold text-white/80">Desde</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Liga</label>
+                      <select
+                        value={fromLeague}
+                        onChange={(e) => {
+                          setFromLeague(e.target.value);
+                          // Si cambia a Master+, resetear LP
+                          if (isHighElo(e.target.value)) {
+                            setFromLP(0);
+                          }
+                        }}
+                        className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 text-white focus:border-primary transition"
+                      >
+                        {LEAGUES.map((league) => (
+                          <option key={league} value={league}>{league}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    {isHighElo(fromLeague) ? (
                       <div>
-                        <label className="block text-sm text-white/60 mb-2">Liga</label>
-                        <select
-                          value={fromLeague}
-                          onChange={(e) => setFromLeague(e.target.value)}
-                          className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 text-white focus:border-primary transition"
-                        >
-                          {LEAGUES.map((league) => (
-                            <option key={league} value={league}>{league}</option>
-                          ))}
-                        </select>
+                        <label className="block text-sm text-white/60 mb-2">LP Actual</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={fromLP}
+                            onChange={(e) => setFromLP(parseInt(e.target.value))}
+                            className="flex-1 h-2 bg-hextech-border rounded-lg appearance-none cursor-pointer accent-primary"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={fromLP}
+                            onChange={(e) => setFromLP(Math.max(0, Math.min(1000, parseInt(e.target.value) || 0)))}
+                            className="w-20 px-3 py-2 bg-hextech-dark border border-hextech-border rounded text-sm font-bold text-center focus:outline-none focus:border-primary"
+                          />
+                          <span className="text-xs text-white/60 font-bold">LP</span>
+                        </div>
                       </div>
+                    ) : (
                       <div>
                         <label className="block text-sm text-white/60 mb-2">División</label>
                         <select
@@ -626,25 +702,57 @@ export default function BulkPricingPage() {
                           ))}
                         </select>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Hasta */}
                   <div className="space-y-4">
                     <h3 className="font-bold text-white/80">Hasta</h3>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-white/60 mb-2">Liga</label>
+                      <select
+                        value={toLeague}
+                        onChange={(e) => {
+                          setToLeague(e.target.value);
+                          // Si cambia a Master+, resetear LP
+                          if (isHighElo(e.target.value)) {
+                            setToLP(100);
+                          }
+                        }}
+                        className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 text-white focus:border-primary transition"
+                      >
+                        {LEAGUES.map((league) => (
+                          <option key={league} value={league}>{league}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    {isHighElo(toLeague) ? (
                       <div>
-                        <label className="block text-sm text-white/60 mb-2">Liga</label>
-                        <select
-                          value={toLeague}
-                          onChange={(e) => setToLeague(e.target.value)}
-                          className="w-full bg-hextech-dark border border-hextech-border rounded px-4 py-3 text-white focus:border-primary transition"
-                        >
-                          {LEAGUES.map((league) => (
-                            <option key={league} value={league}>{league}</option>
-                          ))}
-                        </select>
+                        <label className="block text-sm text-white/60 mb-2">LP Objetivo</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={toLP}
+                            onChange={(e) => setToLP(parseInt(e.target.value))}
+                            className="flex-1 h-2 bg-hextech-border rounded-lg appearance-none cursor-pointer accent-accent-gold"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000"
+                            step="10"
+                            value={toLP}
+                            onChange={(e) => setToLP(Math.max(0, Math.min(1000, parseInt(e.target.value) || 0)))}
+                            className="w-20 px-3 py-2 bg-hextech-dark border border-accent-gold/30 rounded text-sm font-bold text-center text-accent-gold focus:outline-none focus:border-accent-gold"
+                          />
+                          <span className="text-xs text-accent-gold/60 font-bold">LP</span>
+                        </div>
                       </div>
+                    ) : (
                       <div>
                         <label className="block text-sm text-white/60 mb-2">División</label>
                         <select
@@ -657,7 +765,7 @@ export default function BulkPricingPage() {
                           ))}
                         </select>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -679,7 +787,7 @@ export default function BulkPricingPage() {
                         </p>
                         <div className="border-t border-hextech-border pt-4">
                           <div className="flex justify-between items-center">
-                            <span className="text-xl font-bold">PRECIO</span>
+                            <span className="text-xl font-bold">PRECIO (ARS)</span>
                             <span className="text-3xl font-black text-primary">
                               ${calculatedPrice.total.toFixed(2)}
                             </span>
@@ -688,7 +796,7 @@ export default function BulkPricingPage() {
                       </>
                     ) : (
                       <>
-                        <h3 className="font-bold text-lg mb-4">Desglose del Precio (Bulk)</h3>
+                        <h3 className="font-bold text-lg mb-4">Desglose del Precio</h3>
                         <div className="space-y-2 mb-4">
                           {calculatedPrice.breakdown.map((item, index) => (
                             <div key={index} className="flex justify-between text-sm">
@@ -697,7 +805,14 @@ export default function BulkPricingPage() {
                                   <span className="text-white/80">
                                     {item.steps} pasos en {item.league} × ${item.pricePerStep}
                                   </span>
-                                  <span className="text-white font-bold">${item.cost.toFixed(2)}</span>
+                                  <span className="text-white font-bold">${item.cost.toFixed(2)} ARS</span>
+                                </>
+                              ) : item.type === 'lp_steps' ? (
+                                <>
+                                  <span className="text-white/80">
+                                    {item.lp_diff} LP en {item.league} ({item.steps} × 50 LP) × ${item.pricePerStep}
+                                  </span>
+                                  <span className="text-accent-gold font-bold">${item.cost.toFixed(2)} ARS</span>
                                 </>
                               ) : item.type === 'individual_step' ? (
                                 <>
@@ -705,14 +820,28 @@ export default function BulkPricingPage() {
                                     <span className="text-primary font-bold">★</span>
                                     {item.from} → {item.to} (individual)
                                   </span>
-                                  <span className="text-primary font-bold">${item.cost.toFixed(2)}</span>
+                                  <span className="text-primary font-bold">${item.cost.toFixed(2)} ARS</span>
                                 </>
-                              ) : (
+                              ) : item.type === 'transition' ? (
                                 <>
                                   <span className="text-white/80">
                                     Transición {item.from} → {item.to}
                                   </span>
-                                  <span className="text-primary font-bold">${item.cost.toFixed(2)}</span>
+                                  <span className="text-primary font-bold">${item.cost.toFixed(2)} ARS</span>
+                                </>
+                              ) : item.type === 'duo_extra' ? (
+                                <>
+                                  <span className="text-white/80">
+                                    {item.description}
+                                  </span>
+                                  <span className="text-primary font-bold">${item.cost.toFixed(2)} ARS</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-white/80">
+                                    {item.description || 'Otro'}
+                                  </span>
+                                  <span className="text-white font-bold">${item.cost.toFixed(2)} ARS</span>
                                 </>
                               )}
                             </div>
@@ -720,7 +849,7 @@ export default function BulkPricingPage() {
                         </div>
                         <div className="border-t border-hextech-border pt-4">
                           <div className="flex justify-between items-center">
-                            <span className="text-xl font-bold">TOTAL</span>
+                            <span className="text-xl font-bold">TOTAL (ARS)</span>
                             <span className="text-3xl font-black text-primary">
                               ${calculatedPrice.total.toFixed(2)}
                             </span>
@@ -739,24 +868,19 @@ export default function BulkPricingPage() {
                       Completa los precios base y costos de transición arriba, luego guarda la configuración para poder calcular precios
                     </p>
                   </div>
-                ) : getRankPosition(toLeague, toDivision) <= getRankPosition(fromLeague, fromDivision) ? (
-                  <div className="bg-hextech-dark/50 border border-yellow-500/30 rounded-lg p-6 text-center">
-                    <div className="text-yellow-500 text-4xl mb-2 font-bold">!</div>
-                    <p className="text-white/80 text-sm">
-                      El rango de destino debe ser superior al rango de origen
-                    </p>
-                    <p className="text-white/60 text-xs mt-2">
-                      Selecciona un rango de destino más alto para ver el precio
-                    </p>
-                  </div>
                 ) : (
                   <div className="bg-hextech-dark/50 border border-green-500/30 rounded-lg p-6 text-center">
                     <div className="text-green-500 text-4xl mb-2 font-bold">✓</div>
                     <p className="text-white/80 text-sm font-bold mb-2">
-                      Listo para calcular
+                      Calculando precio...
                     </p>
                     <p className="text-white/60 text-xs">
-                      El precio se calculará automáticamente
+                      {isHighElo(fromLeague) && isHighElo(toLeague) 
+                        ? `${fromLeague} ${fromLP} LP → ${toLeague} ${toLP} LP`
+                        : isHighElo(toLeague)
+                        ? `${fromLeague} ${fromDivision} → ${toLeague} ${toLP} LP`
+                        : `${fromLeague} ${fromDivision} → ${toLeague} ${toDivision}`
+                      }
                     </p>
                   </div>
                 )}

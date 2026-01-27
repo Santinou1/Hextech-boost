@@ -80,6 +80,10 @@ export const orderService = {
   getById: (id) => api.get(ORDER_ENDPOINTS.GET_BY_ID(id)),
   updateStatus: (id, status) => api.patch(ORDER_ENDPOINTS.UPDATE_STATUS(id), { status }),
   updateProgress: (id, data) => api.patch(ORDER_ENDPOINTS.UPDATE_PROGRESS(id), data),
+  processPayment: (orderId, data) => api.post(ORDER_ENDPOINTS.PROCESS_PAYMENT(orderId), data),
+  approvePayment: (orderId) => api.post(`/orders/${orderId}/approve-payment`),
+  rejectPayment: (orderId, reason) => api.post(`/orders/${orderId}/reject-payment`, { reason }),
+  cancel: (id) => api.post(ORDER_ENDPOINTS.CANCEL(id)),
 };
 
 // ==================== MATCH SERVICES ====================
